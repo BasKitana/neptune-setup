@@ -1,0 +1,5 @@
+{
+  "ollama": {"available": false},
+  "codex": {"available": false},
+  "claude": {"available": false}
+}

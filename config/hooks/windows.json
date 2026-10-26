@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','windows')\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','windows')\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('worker-stop','windows')\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ]
+  }
+}

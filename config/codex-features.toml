@@ -1,0 +1,4 @@
+# Merge only these keys into the existing [features] table. Do not replace config.toml.
+[features]
+hooks = true
+multi_agent = false

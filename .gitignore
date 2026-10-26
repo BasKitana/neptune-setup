@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+.env
+.env.*
+!.env.example
+auth.json
+credentials*
+*.sqlite*
+*.db
+*.log
+backups/
+generated/
+local-settings.json

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -e
+source "$HOME/.config/neptune/environment.bash"
+neptune "$@"

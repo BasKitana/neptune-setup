@@ -1,0 +1,39 @@
+{
+  "core": {
+    "WezTerm": "https://wezterm.org/",
+    "PowerShell": "https://learn.microsoft.com/powershell/",
+    "Herdr": "https://herdr.dev/docs/",
+    "Neovim": "https://neovim.io/",
+    "Codex": "https://github.com/openai/codex"
+  },
+  "optional": {
+    "Claude Code": "https://code.claude.com/docs",
+    "Ollama": "https://ollama.com/",
+    "Handy": "https://github.com/cjpais/Handy",
+    "FirstMate": "https://github.com/kunchenguid/firstmate",
+    "Treehouse": "https://github.com/kunchenguid/treehouse",
+    "No Mistakes": "https://github.com/kunchenguid/no-mistakes",
+    "GNHF": "https://github.com/kunchenguid/gnhf",
+    "Usage monitor": "https://github.com/senna-lang/herdr-agent-usage",
+    "AXI": "https://github.com/kunchenguid/axi"
+  },
+  "skills": {
+    "installer": "https://github.com/vercel-labs/skills",
+    "ponytail": "https://github.com/DietrichGebert/ponytail",
+    "caveman + ultracave": "https://github.com/JuliusBrussee/caveman",
+    "grill-me only": "https://github.com/JuliusBrussee/skills",
+    "herdr": "https://herdr.dev/docs/agent-skill/",
+    "neptune": "This repository: skills/neptune",
+    "lavish": "https://github.com/kunchenguid/lavish-axi",
+    "gh-axi": "https://github.com/kunchenguid/gh-axi",
+    "chrome-devtools-axi": "https://github.com/kunchenguid/chrome-devtools-axi"
+  },
+  "excluded": [
+    "OpenCode",
+    "credentials and auth files",
+    "chat/session databases",
+    "model weights",
+    "third-party executables"
+  ],
+  "version_policy": "Resolve maintained compatible official releases on destination; record versions and checksums. Do not blindly copy source-machine version pins."
+}

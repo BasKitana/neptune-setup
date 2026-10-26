@@ -1,0 +1,9 @@
+{
+  "sprints": [
+    {"id": "sprint-1", "tasks": [
+      {"id": "docs", "role": "Technical Writer", "intent": "Document the approved feature", "complexity": "simple", "acceptance": ["Examples match actual behavior", "Relevant documentation checks pass"], "depends_on": []},
+      {"id": "review", "role": "QA & Security Engineer", "intent": "Review implementation and safety boundaries", "complexity": "sensitive", "acceptance": ["Actual changes inspected", "Relevant tests pass"], "depends_on": ["docs"]}
+    ]}
+  ],
+  "limits": {"max_parallel": 2, "local_attempts": 2, "api_budget": 0}
+}
