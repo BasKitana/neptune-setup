@@ -39,3 +39,11 @@ FirstMate: use supported upstream installation; retain its task IDs, inboxes and
 ## Honest reporting
 
 Do not silently introduce new paid providers, API billing, credits or overages. Use independent official subscription sign-ins. Never copy auth.json, .claude credentials, browser cookies, SSH keys, sessions, SQLite databases or source trust rules. No models or credentials are present in this repository. Record all destination changes and backups, and disclose unsupported or unverified parts.
+
+## Directory chats and Codex update loops
+
+The shell templates map bare `codex` to `codex resume --last`, scoped to the current working directory. Explicit arguments/subcommands pass through unchanged, as do supervised specialist launches. Do not add `--all` to this default: that could resume another directory's conversation. Use `/new` inside Codex when a fresh conversation is wanted. Verify the installed release's behavior in a directory without previous sessions. Windows and Ubuntu keep separate session stores; never copy authentication or histories through Git.
+
+If Codex repeatedly offers an update after updating, compare the executable actually launched with the installation updated by the package manager. On Ubuntu, inspect `type -a codex`, `ls -l ~/.local/bin/codex`, `npm prefix -g`, `npm list -g @openai/codex --depth=0`, and both executables' `--version` output. The source machine had a stale `~/.local/bin/codex` link into an older package while npm updated a different Node prefix. Back up the old link and point it at the verified current prefix's `bin/codex`. Resolve the destination prefix dynamically; do not hardcode the source machine's Node version. Ensure that prefix's Node runtime is on PATH. Do not delete old packages or change account credentials merely to fix command resolution.
+
+On PowerShell use `Get-Command codex -All` and `npm prefix -g` to diagnose the equivalent mismatch. Restart Codex after updating; an already-running process retains its loaded version. Reload the Ubuntu shell template with `source ~/.config/neptune/environment.bash`, or reopen PowerShell after changing its profile.

@@ -5,7 +5,9 @@
 | neptune | Open/attach NEPTUNE in configured Projects |
 | proj | Go to Projects |
 | pwd / ls / cd folder / cd .. | Navigate |
-| codex / claude | Start that agent in current pane; not a new specialist |
+| codex | Resume the latest Codex chat for the current directory in this pane |
+| codex resume --all | Pick an older chat across directories |
+| claude | Start Claude in the current pane; not a new specialist |
 
 Herdr prefix: Ctrl+B, release, then key. Verify destination bindings in prefix+?.
 

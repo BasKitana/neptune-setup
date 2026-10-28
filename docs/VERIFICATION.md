@@ -19,3 +19,9 @@ Laptop acceptance checks:
 7. Verify restricted model requests stop before creating a pane without scoped human approval. No protected model needs to be run merely for setup.
 8. Detach/reattach without killing existing processes. Explain server/OS shutdown and disabled automatic agent restoration.
 9. Report each component as Installed, Verified, Unsupported, Requires approval or Not tested.
+
+## Directory resume and executable resolution
+
+- In two distinct test directories, create different short manual chats, exit, and confirm bare `codex` resumes each directory's own chat. Check a directory with no prior conversation separately.
+- Confirm `codex --help` and `codex resume --all` pass through, and supervised worker launches remain fresh with their assigned model/effort.
+- After an update, confirm the PATH-selected Codex version matches the package-manager installation. Check for stale links or competing Windows/Ubuntu executables before retrying updates.

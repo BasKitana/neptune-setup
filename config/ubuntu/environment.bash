@@ -18,7 +18,15 @@ _neptune_prelaunch_name() {
     [[ "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" ]] || return 0
     python3 "$HOME/.local/share/neptune/herdr_agents.py" hook
 }
-codex() { _neptune_prelaunch_name; command codex "$@"; }
+codex() {
+    _neptune_prelaunch_name
+    # Explicit commands and supervised specialists must keep their launch arguments.
+    if [ "$#" -eq 0 ] && [ -z "${NEPTUNE_SUPERVISOR_PANE:-}" ]; then
+        command codex resume --last
+    else
+        command codex "$@"
+    fi
+}
 claude() { _neptune_prelaunch_name; command claude "$@"; }
 neptune_project_title() {
     [[ "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" && -n "${HERDR_WORKSPACE_ID:-}" && -n "${HERDR_TAB_ID:-}" ]] || return 0

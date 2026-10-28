@@ -18,7 +18,11 @@ function Set-NeptunePrelaunchName {
 function codex {
     Set-NeptunePrelaunchName
     $cli = Get-Command codex -CommandType Application -ErrorAction Stop | Select-Object -First 1
-    & $cli.Source @args
+    if ($args.Count -eq 0 -and -not $env:NEPTUNE_SUPERVISOR_PANE) {
+        & $cli.Source resume --last
+    } else {
+        & $cli.Source @args
+    }
 }
 function claude {
     Set-NeptunePrelaunchName
