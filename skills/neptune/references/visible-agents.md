@@ -1,6 +1,6 @@
 # Visible workers
 
-Use the existing Herdr skill and environment guard. Install this skill's four scripts together under ~/.local/share/neptune/ on the destination.
+Use the existing Herdr skill and environment guard. Install this skill's five scripts together under ~/.local/share/neptune/ on the destination.
 
 ```bash
 python3 ~/.local/share/neptune/herdr_agents.py name "Orchestrator"

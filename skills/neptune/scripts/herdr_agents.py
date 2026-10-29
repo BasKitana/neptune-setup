@@ -1,5 +1,6 @@
 """Thin Herdr adapter: visible interactive workers and display names, no daemon or router."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -7,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 import worker_models
 
@@ -117,6 +119,7 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
     if not task.strip(): raise ValueError('An explicit task is required')
     project=Path(cwd).resolve()
     if not project.is_dir(): raise ValueError('The task directory/worktree must already exist')
+    refuse_overlapping_takeover(project)
     workspace=os.environ.get('HERDR_WORKSPACE_ID')
     if not workspace: raise ValueError('Herdr workspace context is missing')
     if harness=='codex':
@@ -158,6 +161,8 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
     entries=registered.get('agents',[])
     if not any(entry.get('pane_id')==pane for entry in entries):
         raise ValueError('Worker terminal opened but agent registration was not confirmed; inspect the pane before retrying')
+    record['launch_state']='registered; task pending'
+    record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
     brief=(f'You are the {role} specialist, not the orchestrator. Your supervising orchestrator is in '
            f'Herdr pane {parent}. Work only on this assigned task in {project}. Keep this interactive '
            'conversation available for the user. Report progress, checks and results to the orchestrator '
@@ -182,7 +187,110 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
             'task_completion':'Submitted, not verified complete. Check observed activity and the worker transcript later; do not equate delivery with execution.'}
 
 
-def main():
+def owned_worker(identifier):
+    parent=require_herdr()
+    if not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}',identifier):
+        raise ValueError('Use the actual CLI-safe worker name returned by spawn')
+    record=json.loads((Path.home()/'.local/state/neptune/workers'/(identifier+'.json')).read_text(encoding='utf-8'))
+    if record['supervisor_pane']!=parent:
+        raise ValueError('This worker belongs to another supervising pane')
+    return record
+
+
+def inspect_worker(identifier,file=None):
+    record=owned_worker(identifier)
+    observed=call(['agent','get',identifier])
+    text=call(['agent','read',identifier,'--source','recent-unwrapped','--lines','120'])
+    result={'worker':record,'observed_agent':observed,'transcript':text}
+    if file:
+        root=Path(record['scope']['cwd']).resolve()
+        target=(root/file).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise ValueError('Review files must be inside the assigned worker directory')
+        with target.open('r',encoding='utf-8',errors='replace') as stream:
+            result['file']={'path':str(target),'text':stream.read(24000)}
+    else:
+        # Evidence is read by fixed argv, never a caller-supplied shell command.
+        diff=subprocess.run(['git','--no-pager','-C',record['scope']['cwd'],'diff','--no-ext-diff','--no-textconv','--stat'],
+                            capture_output=True,text=True,timeout=10)
+        result['diff_stat']=diff.stdout[:12000] if diff.returncode==0 else 'Not a Git working tree'
+    record['last_inspected_at']=time.time()
+    (Path.home()/'.local/state/neptune/workers'/(identifier+'.json')).write_text(json.dumps(record,indent=2),encoding='utf-8')
+    return result
+
+
+def send_worker(identifier,task):
+    record=owned_worker(identifier)
+    refuse_overlapping_takeover(Path(record['scope']['cwd']))
+    if not task.strip(): raise ValueError('An explicit task is required')
+    observed=call(['agent','get',identifier])
+    agent=observed.get('agent',observed)
+    if agent.get('state') not in ('idle','done'):
+        raise ValueError('Worker is busy or its state is unknown; inspect it before reuse')
+    return {'worker':identifier,'prompt_result':call(['agent','prompt',identifier,task]),
+            'task_completion':'Submitted, not verified complete'}
+
+
+def takeover_path(home,pane):
+    key=hashlib.sha256(pane.encode()).hexdigest()
+    return home/'.local/state/neptune/takeovers'/(key+'.json')
+
+
+def refuse_overlapping_takeover(project):
+    path=takeover_path(Path.home(),require_herdr())
+    if path.exists():
+        lease=json.loads(path.read_text(encoding='utf-8'))
+        root=Path(lease['cwd']).resolve()
+        project=project.resolve()
+        if (not lease.get('closed') and lease.get('expires_at',0)>time.time() and
+                (project.is_relative_to(root) or root.is_relative_to(project))):
+            raise ValueError('Finish the direct takeover before dispatching overlapping worker writes')
+
+
+def interrupt_worker(identifier):
+    owned_worker(identifier)
+    return {'worker':identifier,'interrupt':call(['agent','send-keys',identifier,'ctrl+c']),
+            'next':'Inspect again. Interrupt delivery alone does not prove the worker or background writers stopped.'}
+
+
+def takeover_worker(identifier,reason,quiescent=False):
+    record=owned_worker(identifier)
+    if not quiescent or len(reason.strip())<20:
+        raise ValueError('Takeover needs a specific stall reason and --quiescent after verifying no background writer remains')
+    if record.get('takeover'):
+        raise ValueError('This worker already had its one exceptional takeover; do not turn fallback into the normal workflow')
+    now=time.time()
+    inspected=record.get('last_inspected_at',0)
+    if not 0<=now-inspected<=300:
+        raise ValueError('Inspect the stalled worker immediately before considering takeover')
+    observed=call(['agent','get',identifier])
+    if observed.get('agent',observed).get('state') not in ('idle','done'):
+        raise ValueError('Worker is still active, blocked or unknown. Interrupt and verify quiescence before takeover')
+    parent=require_herdr()
+    lease={'worker':identifier,'supervisor_pane':parent,'cwd':record['scope']['cwd'],
+           'reason':reason.strip(),'issued_at':now,'expires_at':now+600,'closed':False}
+    target=takeover_path(Path.home(),parent)
+    if target.exists():
+        current=json.loads(target.read_text(encoding='utf-8'))
+        if not current.get('closed') and current.get('expires_at',0)>now:
+            raise ValueError('Finish the existing takeover before requesting another')
+    target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text(json.dumps(lease,indent=2),encoding='utf-8')
+    record['takeover']=lease
+    (Path.home()/'.local/state/neptune/workers'/(identifier+'.json')).write_text(json.dumps(record,indent=2),encoding='utf-8')
+    return {'takeover':lease,'next':'Complete only this stalled task, verify it, then run finish-takeover. New user prompts revoke this lease.'}
+
+
+def finish_takeover():
+    path=takeover_path(Path.home(),require_herdr())
+    if path.exists():
+        lease=json.loads(path.read_text(encoding='utf-8'))
+        lease['closed']=True
+        path.write_text(json.dumps(lease,indent=2),encoding='utf-8')
+    return {'takeover':'closed'}
+
+
+def make_parser():
     parser=argparse.ArgumentParser(description=__doc__)
     commands=parser.add_subparsers(dest='command',required=True)
     sub=commands.add_parser('name');sub.add_argument('role')
@@ -197,11 +305,27 @@ def main():
     sub.add_argument('--failed-attempts',type=int,default=0)
     sub.add_argument('--reason')
     sub.add_argument('--approval-file',help='Task-specific human approval record; never fabricate a user reference')
+    sub=commands.add_parser('inspect');sub.add_argument('worker');sub.add_argument('--file')
+    sub=commands.add_parser('send');sub.add_argument('worker');sub.add_argument('--task',required=True)
+    sub=commands.add_parser('interrupt');sub.add_argument('worker')
+    sub=commands.add_parser('takeover');sub.add_argument('worker');sub.add_argument('--reason',required=True)
+    sub.add_argument('--quiescent',action='store_true')
+    commands.add_parser('finish-takeover')
+    return parser
+
+
+def main():
+    parser=make_parser()
     args=parser.parse_args()
     try:
         if args.command=='hook': hook();return
         if args.command=='report-hook': report_hook();print('{}');return
         if args.command=='name': result=name(args.role)
+        elif args.command=='inspect': result=inspect_worker(args.worker,args.file)
+        elif args.command=='send': result=send_worker(args.worker,args.task)
+        elif args.command=='interrupt': result=interrupt_worker(args.worker)
+        elif args.command=='takeover': result=takeover_worker(args.worker,args.reason,args.quiescent)
+        elif args.command=='finish-takeover': result=finish_takeover()
         else:
             approval=json.loads(Path(args.approval_file).read_text(encoding='utf-8-sig')) if args.approval_file else None
             result=spawn(args.role,args.harness,args.task,args.cwd,args.model,args.effort,

@@ -25,3 +25,11 @@ Laptop acceptance checks:
 - In two distinct test directories, create different short manual chats, exit, and confirm bare `codex` resumes each directory's own chat. Check a directory with no prior conversation separately.
 - Confirm `codex --help` and `codex resume --all` pass through, and supervised worker launches remain fresh with their assigned model/effort.
 - After an update, confirm the PATH-selected Codex version matches the package-manager installation. Check for stale links or competing Windows/Ubuntu executables before retrying updates.
+
+## Delegation gate regressions
+
+The gate suite checks the reported `touch 'hi .txt'` regression, patches/MCP calls, validated visible dispatch with explicit task-based selection, inspection and corrections, shell-injection attempts, worker record/ownership checks, hidden-agent denial, outside-Herdr behavior and code-mode nested calls. Node tests confirm gate errors, timeouts and malformed output return explicit denial while optional display hooks remain nonblocking. Fixtures do not prove native tool interception or actual live workers.
+
+Live acceptance inside a genuine managed pane: trust the installed hooks through the native CLI; request creation of `hi .txt` in a disposable directory; verify direct Orchestrator execution is denied, a visible File Systems Engineer starts with an advertised economical model/effort, the worker creates the exact file, and the Orchestrator inspects that worker/file before reporting success. Also check a busy worker refuses correction delivery, another supervising pane cannot inspect its private record through the helper, and naming/completion hooks still work. Do not manufacture environment IDs for this test.
+
+Takeover fixtures also check refusal without inspection/quiescence, refusal while busy, one-time use, directory bounds, expiry, new-prompt revocation, overlapping worker dispatch refusal and interruption ownership. Native interruption/quiescence and end-to-end recovery still require an actual managed Herdr session; fixture states are not live evidence.

@@ -20,6 +20,15 @@
             "timeout": 8
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('delegation-prompt','ubuntu')\"",
+            "timeout": 8
+          }
+        ]
       }
     ],
     "Stop": [
@@ -28,6 +37,18 @@
           {
             "type": "command",
             "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('worker-stop','ubuntu')\"",
+            "timeout": 8
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('delegation-tool','ubuntu')\"",
             "timeout": 8
           }
         ]

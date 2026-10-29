@@ -8,12 +8,40 @@ description: "Run an approved NEPTUNE software project through the existing Firs
 Extend the installed workflow. Do not replace the terminal, start an independent supervisor loop, or invent project work. Use Ponytail/K.I.S.S. when coding. This skill adds governance metadata; FirstMate remains authoritative for live workers, inboxes, worktrees and delivery. Never treat the metadata ledger as proof of a live agent's status.
 
 ## Orchestrator-first agent workflow
-An interactive AI session opened directly by the user is the Orchestrator by default. Receive the user's goal, keep the plan and decisions, coordinate the work, and report results. Use the installed FirstMate/NEPTUNE workflow for delegation rather than building another orchestrator. Do not start project work merely because a session opens.
+An interactive AI session opened directly by the user is the Orchestrator by default. Use the strongest available model for this role, as selected by the user; never downgrade it automatically. Receive the user's goal, keep the plan and decisions, coordinate the work, and report results. Use the installed FirstMate/NEPTUNE workflow for delegation rather than building another orchestrator. Do not start project work merely because a session opens.
 
-Delegate by default: use at least one visible Herdr specialist, named for its real work, for about 90% of substantive requests, including research, debugging, implementation and verification. The Orchestrator scopes and dispatches work, reviews evidence and reports results. Handle trivial answers, clarifications and tiny edits directly when delegation would add more overhead than value. Reuse suitable specialists; do not spawn extra agents just to meet the percentage. If genuine Herdr context is unavailable, disclose that limitation and complete authorized direct work when useful.
+Delegate by default: use at least one visible Herdr specialist, named for its real work, for about 90% of substantive requests, including research, debugging, implementation and verification. The Orchestrator scopes and dispatches work, reviews evidence and reports results. Only conversation and clarification stay direct by default. Delegate every action request, including a single file operation, first. The Orchestrator may take over stalled work only as a rare exception after inspecting and quiescing the worker; preserve work, record the reason and finish only that scoped task. Reuse suitable specialists; do not spawn extra agents just to meet the percentage. If genuine Herdr context is unavailable, disclose that limitation and complete authorized direct work when useful.
 
 Create only the specialists needed for the requested work, named by their professional role: UI/UX Designer, Frontend Engineer, Backend Engineer, QA Engineer, or another relevant role. Never use fictional character names. Preserve each worker's role, scope, task, session reference and progress. Use the professional role as the visible pane/tab label where supported, and a unique CLI-safe name such as ui-ux-designer or frontend-engineer-2. Preserve FirstMate's own task IDs; do not rename its bookkeeping to force a label.
 A spawned agent with an explicit worker brief is a specialist, not another Orchestrator. Its brief must identify its role, assigned task, acceptance checks, project/worktree and supervising Orchestrator. Workers report back to that Orchestrator. Keep parallel writers isolated, reconcile direct-discussion decisions, and archive completed roles without destroying unreviewed work. Do not create an entire fixed team or recursively delegate without a concrete need.
+
+## Delegation tool gate
+
+In actual Herdr panes, the installed `UserPromptSubmit` hook injects routing guidance and `PreToolUse` blocks direct Orchestrator tool work, including `touch`, patches and MCP operations. Every action is delegated first. Conversation stays direct; the only direct-execution exception is a rare, recorded takeover of an already delegated stalled task, not a random bypass. Choose an explicit `--complexity` or justified `--model` on each spawn. The existing worker policy selects and validates model/effort before opening a tab. Do not invent context or silently execute a task after a failed launch.
+
+Use single shell commands to the installed `herdr_agents.py` helper:
+
+```bash
+python3 "$HOME/.local/share/neptune/herdr_agents.py" spawn "File Systems Engineer" --complexity simple --cwd "/actual/task/directory" --task "Create hi .txt and verify the exact filename."
+python3 "$HOME/.local/share/neptune/herdr_agents.py" inspect <actual-worker-name> --file "hi .txt"
+python3 "$HOME/.local/share/neptune/herdr_agents.py" send <actual-worker-name> --task "Correct the specific defect and repeat the acceptance check."
+```
+
+`inspect` returns native activity/transcript evidence plus a Git diff summary or a bounded file read inside the assigned directory. `send` accepts only owned, idle/done workers; unknown or busy states refuse delivery. Reuse a suitable worker only when its observed model, effort and scope fit; otherwise spawn the necessary specialist. Worker reports do not require a new worker merely to acknowledge them. Native Codex code-mode wrappers may carry calls; every nested executable tool still passes through the gate.
+
+Worker execution requires its actual pane and supervisor to match a registered launch record. Hidden native agents remain blocked. Outside Herdr the gate does not enforce delegation or control an existing session; disclose that limitation. Trusted, enabled, supported hooks are required. This is a workflow guard, not a tamper-proof sandbox; an unrestricted user can disable it and some hosted tools bypass local hooks. Do not fabricate hook-trust hashes.
+
+### Rare stalled-worker takeover
+
+The strongest Orchestrator reviews actual output, sends specific corrections to the same specialist and verifies its response before reporting to the user. Slow work alone is not failure. Inspect progress and preserve partial work; do not start competing writers.
+
+If a worker has actually stalled, `interrupt NAME` sends Ctrl+C without claiming it stopped. Inspect again. Only after verifying the worker and any background writers are quiescent may the Orchestrator request:
+
+```bash
+python3 "$HOME/.local/share/neptune/herdr_agents.py" takeover <actual-worker-name> --reason "specific stall evidence and why direct recovery is needed" --quiescent
+```
+
+The helper requires a recent inspection, owned worker, idle/done native state, explicit quiescence attestation and a specific reason. It permits one exceptional takeover per worker, records the reason, scopes the lease to the assigned directory and expires it after ten minutes or a new user prompt. Finish the scoped recovery, verify it and run `finish-takeover`. Overlapping worker dispatch is refused while that lease is active. Background quiescence is a reviewed attestation, not something idle/done alone proves. Shell working-directory checks are not a filesystem sandbox; platform permissions remain authoritative. If state is unknown or safe takeover cannot be established, report the blocker instead of guessing.
 
 ## Start or resume
 

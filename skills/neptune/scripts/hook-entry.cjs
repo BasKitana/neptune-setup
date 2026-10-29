@@ -5,11 +5,15 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 function plan(kind, origin, platform, home) {
-  if (!['name', 'worker-stop', 'codex-session', 'claude-session'].includes(kind)) throw new Error('Unknown hook kind');
+  if (!['name', 'worker-stop', 'codex-session', 'claude-session', 'delegation-prompt', 'delegation-tool'].includes(kind)) throw new Error('Unknown hook kind');
   if (!['windows', 'ubuntu'].includes(origin)) throw new Error('Unknown hook origin');
   const windows = platform === 'win32';
   if ((origin === 'windows') !== windows) return null;
   const join = (windows ? path.win32 : path.posix).join;
+  if (kind.startsWith('delegation-')) return {
+    command: windows ? 'python' : 'python3',
+    args: [join(home, '.local', 'share', 'neptune', 'delegation_gate.py'), kind.slice('delegation-'.length)],
+  };
   if (kind === 'name' || kind === 'worker-stop') return {
     command: windows ? 'python' : 'python3',
     args: [join(home, '.local', 'share', 'neptune', 'herdr_agents.py'), kind === 'name' ? 'hook' : 'report-hook'],
@@ -24,6 +28,12 @@ function plan(kind, origin, platform, home) {
 
 function run(kind, origin, options = {}) {
   const warn = options.warn || ((message) => process.stderr.write(message + '\n'));
+  const write = options.write || ((message) => process.stdout.write(message));
+  const strict = kind === 'delegation-tool';
+  const blocked = (reason) => write(JSON.stringify({hookSpecificOutput: {
+    hookEventName: 'PreToolUse', permissionDecision: 'deny',
+    permissionDecisionReason: 'NEPTUNE delegation gate unavailable; tool blocked: ' + reason,
+  }}) + '\n');
   try {
     const invocation = plan(kind, origin, options.platform || process.platform, options.home || os.homedir());
     if (!invocation) return 0;
@@ -33,10 +43,21 @@ function run(kind, origin, options = {}) {
     const result = (options.spawn || spawnSync)(invocation.command, invocation.args, {
       input, encoding: 'utf8', timeout: 5000, windowsHide: true,
     });
-    if (result.error || result.status) warn('NEPTUNE optional hook: ' + (result.error?.message || result.stderr || result.status));
-    else if (result.stdout && !options.spawn) process.stdout.write(result.stdout);
+    if (result.error || result.status) {
+      const reason = result.error?.message || result.stderr || result.status;
+      if (strict) blocked(reason);
+      else warn('NEPTUNE optional hook: ' + reason);
+    } else if (strict) {
+      const parsed = JSON.parse(result.stdout);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Invalid gate response');
+      if (Object.keys(parsed).length && !(parsed.hookSpecificOutput?.hookEventName === 'PreToolUse' &&
+          parsed.hookSpecificOutput.permissionDecision === 'deny' &&
+          typeof parsed.hookSpecificOutput.permissionDecisionReason === 'string')) throw new Error('Invalid gate decision');
+      write(JSON.stringify(parsed) + '\n');
+    } else if (result.stdout && (!options.spawn || options.write)) write(result.stdout);
   } catch (error) {
-    warn('NEPTUNE optional hook: ' + error.message);
+    if (strict) blocked(error.message);
+    else warn('NEPTUNE optional hook: ' + error.message);
   }
   return 0;
 }
