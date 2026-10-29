@@ -5,7 +5,7 @@
     ".gitignore": "f6c37ea79f7be95fff1000e87bc4d3025e17217f0d7fc9626c6dc788238f9536",
     "AGENTS.md": "2ef71b8b26097869396621fd97c2847d1674ad5b76337522fb88f96d03cfbf4a",
     "config/codex-features.toml": "70fb3aae100b715b7e34ccbe30ae73cef21bc488223c20c5e82f12cc002ffad1",
-    "config/GLOBAL-AGENTS.md": "1ba18868701397cf321510e12d7bed7bea13ace95dee4fe71395b90c0d8bba7c",
+    "config/GLOBAL-AGENTS.md": "0ad795c640d83ddf876bc349841def83db998145df3c7b424cb2b13f2d8fdbcd",
     "config/hooks/ubuntu.json": "d07a0cdcab13d8aba285e439a66c2b23b896dfdc013ce9d9f08ff40e2d5f3d35",
     "config/hooks/windows.json": "e9539c444ccbc63bf2ef61fc5bd2a134665add14f6ee2f51665ae6bcc59c57f8",
     "config/ubuntu/environment.bash": "e228cf5091c932cb2cf82738687b0f4703359f18d1e5ed6e143c52a091e6522e",
@@ -32,7 +32,7 @@
     "skills/neptune/scripts/hook-entry.cjs": "9d40d97cd5da34f25c00fdb3ddcb00c2771f796c3af3300af917a763cdf796d1",
     "skills/neptune/scripts/neptune.py": "1e8ce32a5129b7e1ece8378dfef32ff5fe68df30c5b0104840f9195672413f2c",
     "skills/neptune/scripts/worker_models.py": "0e87db983422e813137eca34c8a32c8737ca45429cfe965fb3ad237138ec705f",
-    "skills/neptune/SKILL.md": "9ec77f6f76383b5bc9e4d7bf8a477f918b013025ece38328d76e1e7c37c28c88",
+    "skills/neptune/SKILL.md": "67bf2af0054dad9dc732cf9969c1dfea8ea501f5b1012ca02fcf8355895036a9",
     "sources.json": "28b23103583faccc56ffa3ea3ea42058b500f241b34cffc963a8ace8a6a27835",
     "START-HERE.md": "5fb5462e4470b9bd59176b52420b34feb3804de47542772609b4f2e4b6eb8a1b",
     "THIRD_PARTY_NOTICES.md": "ae56bd2b5b9511fffedcfb7d959fcd2f9294e4aabdce3e576f647ff3dcff0997"
