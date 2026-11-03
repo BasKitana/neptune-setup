@@ -96,6 +96,14 @@ class DelegationTests(unittest.TestCase):
         for tool in ['Agent', 'Task', 'spawn_agent']:
             self.denied(self.check_tool(tool, env=worker))
 
+    def test_desktop_prompt_explains_supported_entry_without_dead_end(self):
+        context = gate.evaluate('prompt', {}, self.home, {})['hookSpecificOutput']['additionalContext']
+        self.assertIn('open WezTerm, run neptune', context)
+        self.assertIn('then run codex', context)
+        self.assertIn('offline checks may proceed here', context)
+        self.assertIn('do not repeat', context)
+        self.assertNotIn('Use NEPTUNE for delegated execution', context)
+
     def test_outside_herdr_does_not_control_a_session(self):
         with patch.object(agents, 'call') as call:
             self.assertEqual(self.check_tool(env={}), {})

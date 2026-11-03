@@ -117,8 +117,14 @@ def evaluate(kind, payload, home=None, env=None):
     if env.get('HERDR_ENV') != '1':
         if kind == 'prompt':
             return {'hookSpecificOutput': {'hookEventName': 'UserPromptSubmit',
-                    'additionalContext': 'Outside Herdr: visible-worker enforcement is unavailable. '
-                    'Do not fabricate Herdr context. Use NEPTUNE for delegated execution.'}}
+                    'additionalContext': 'This chat is outside a Herdr-managed pane; NEPTUNE is installed but visible '
+                    'Herdr workers require an Orchestrator launched inside Herdr. '
+                    'For that workflow, open WezTerm, run neptune in the project directory, '
+                    'then run codex inside the resulting Herdr pane. Never fabricate pane '
+                    'context, control Herdr from this desktop chat, or substitute hidden workers. '
+                    'Authorized setup edits and offline checks may proceed here. Explain this '
+                    'boundary only when relevant; do not repeat an unavailable warning or keep '
+                    'rediscovering execution options on every request.'}}
         return {}
     if not env.get('HERDR_PANE_ID'):
         raise ValueError('Herdr pane context is missing')
