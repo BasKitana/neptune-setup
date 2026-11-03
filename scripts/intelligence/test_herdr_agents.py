@@ -112,6 +112,10 @@ class VisibleAgentTests(unittest.TestCase):
         self.assertIn('gpt-6-luna',start)
         self.assertIn('model_reasoning_effort="medium"',start)
         self.assertIn('service_tier="default"',start)
+        self.assertIn('--no-daemon',start)
+        self.assertIn('features.multi_agent=false',start)
+        created=next(args for args in seen if args[:2]==['tab','create'])
+        self.assertIn('NEPTUNE_ACTIVE=1',created)
         self.assertEqual(result['selection']['model'],'gpt-6-luna')
         self.assertTrue(Path(result['record_file']).is_file())
 

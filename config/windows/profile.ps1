@@ -26,7 +26,7 @@ function codex {
     Set-NeptunePrelaunchName
     $cli = Get-Command codex -CommandType Application -ErrorAction Stop | Select-Object -First 1
     if ($env:NEPTUNE_ACTIVE -eq '1' -and $env:HERDR_ENV -eq '1') {
-        & $cli.Source -c features.multi_agent=false @args
+        & $cli.Source --no-daemon -c features.multi_agent=false @args
     } else { & $cli.Source @args }
 }
 function claude {

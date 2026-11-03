@@ -127,7 +127,7 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
                                        worker_models.task_scope(role,task,project),approval)
         if selection['approval_required']:
             raise ValueError('Human approval required before starting this worker: '+json.dumps(selection))
-        native_args=['--model',selection['model'],'-c','model_reasoning_effort='+json.dumps(selection['effort']),
+        native_args=['--no-daemon','-c','features.multi_agent=false','--model',selection['model'],'-c','model_reasoning_effort='+json.dumps(selection['effort']),
                      '-c','service_tier="default"']
     else:
         if not model or not effort or not reason:
@@ -137,7 +137,7 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
         native_args=['--model',model,'--effort',effort]
     name('Orchestrator')
     created=call(['tab','create','--workspace',workspace,'--cwd',str(project),'--label',role,
-                  '--env','NEPTUNE_AGENT_ROLE='+role,'--env','NEPTUNE_SUPERVISOR_PANE='+parent,
+                  '--env','NEPTUNE_ACTIVE=1','--env','NEPTUNE_AGENT_ROLE='+role,'--env','NEPTUNE_SUPERVISOR_PANE='+parent,
                   '--env','NEPTUNE_WORKER_MODEL='+selection['model'],
                   '--env','NEPTUNE_WORKER_EFFORT='+selection['effort'],'--no-focus'])
     pane=created['root_pane']['pane_id']

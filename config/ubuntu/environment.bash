@@ -21,7 +21,7 @@ _neptune_prelaunch_name() {
 codex() {
     _neptune_prelaunch_name
     if [[ "${NEPTUNE_ACTIVE:-}" == 1 && "${HERDR_ENV:-}" == 1 ]]; then
-        command codex -c features.multi_agent=false "$@"
+        command codex --no-daemon -c features.multi_agent=false "$@"
     else
         command codex "$@"
     fi
