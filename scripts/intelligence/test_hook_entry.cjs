@@ -1,6 +1,13 @@
 const assert = require('node:assert/strict');
-const { plan, run } = require('../../skills/neptune/scripts/hook-entry.cjs');
+const { plan, run: rawRun } = require('../../skills/neptune/scripts/hook-entry.cjs');
 
+const activeEnv = {NEPTUNE_ACTIVE:'1', HERDR_ENV:'1', HERDR_PANE_ID:'fixture-pane'};
+const run = (kind, origin, options = {}) => rawRun(kind, origin, {env:activeEnv, ...options});
+for (const env of [{}, {HERDR_ENV:'1', HERDR_PANE_ID:'other'}, {NEPTUNE_ACTIVE:'1'}]) {
+  for (const kind of ['name','worker-stop','codex-session','claude-session','delegation-prompt','delegation-tool']) {
+    assert.equal(rawRun(kind, 'windows', {env, spawn:()=>{throw new Error('must not launch');}, write:()=>{throw new Error('must not inject');}}), 0);
+  }
+}
 assert.equal(plan('name', 'windows', 'linux', '/home/fixture'), null);
 assert.equal(plan('codex-session', 'windows', 'linux', '/home/fixture'), null);
 assert.equal(plan('name', 'ubuntu', 'win32', 'C:\\Users\\fixture'), null);

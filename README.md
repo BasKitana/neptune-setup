@@ -15,6 +15,8 @@ Open WezTerm -> NEPTUNE/Herdr -> Projects -> launch your Orchestrator. Specialis
 - Ollama stays local; no automatic API billing, credits, or provider substitution.
 - Shared skills, K.I.S.S., Caveman Ultra chat style, keyboard navigation, local dictation, and honest usage reporting.
 
+NEPTUNE hooks and delegation rules are scoped to NEPTUNE-launched Herdr panes. Ordinary Codex Desktop/CLI, Claude, and other Herdr sessions remain unaffected.
+
 ## What is portable
 
 | Path | Purpose |

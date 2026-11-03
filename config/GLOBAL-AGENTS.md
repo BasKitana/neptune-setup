@@ -1,3 +1,5 @@
+Scope: All NEPTUNE workflow rules below apply only when the NEPTUNE hook explicitly identifies an active NEPTUNE session, launched with NEPTUNE_ACTIVE=1 inside a genuine Herdr pane. In ordinary Codex Desktop/CLI, Claude, and other Herdr sessions, these NEPTUNE rules do not apply: do not require delegation, mention missing Herdr context, or change their models or workflow. Explicit requests to maintain NEPTUNE may use its skill for setup and offline checks without activating its worker workflow.
+
 # NEPTUNE global behavior
 
 K.I.S.S. is mandatory. Use Ponytail for relevant coding. Prefer existing code/tools and the smallest complete solution without dropping correctness, security, error handling or validation. Load skills on demand. Grill Me only when requested. Caveman Ultra is the default chat style: shortest clear answer, exact commands/errors/numbers/negations preserved; use normal prose for persisted documents, approvals, ambiguity and user confusion.

@@ -5,6 +5,9 @@ description: "Run an approved NEPTUNE software project through the existing Firs
 
 # NEPTUNE
 
+Scope: All NEPTUNE workflow rules below apply only when the NEPTUNE hook explicitly identifies an active NEPTUNE session, launched with NEPTUNE_ACTIVE=1 inside a genuine Herdr pane. In ordinary Codex Desktop/CLI, Claude, and other Herdr sessions, these NEPTUNE rules do not apply: do not require delegation, mention missing Herdr context, or change their models or workflow. Explicit requests to maintain NEPTUNE may use its skill for setup and offline checks without activating its worker workflow.
+
+
 Extend the installed workflow. Do not replace the terminal, start an independent supervisor loop, or invent project work. Use Ponytail/K.I.S.S. when coding. This skill adds governance metadata; FirstMate remains authoritative for live workers, inboxes, worktrees and delivery. Never treat the metadata ledger as proof of a live agent's status.
 
 ## Orchestrator-first agent workflow

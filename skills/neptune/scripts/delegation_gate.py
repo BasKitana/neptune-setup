@@ -8,7 +8,7 @@ import time
 
 
 GUIDANCE = (
-    'You are the Orchestrator. Delegate executable work, including one-file tasks, to a visible '
+    'Active NEPTUNE session (NEPTUNE_ACTIVE=1 in a real Herdr pane). Apply the NEPTUNE workflow. You are the Orchestrator. Delegate executable work, including one-file tasks, to a visible '
     'Herdr specialist. Choose its role and complexity from the task; the helper selects an '
     'available economical model/effort (simple: Luna low; bounded: Luna medium; complex: Luna high; '
     'sensitive: GPT-6 Sol high). Do not change your own model. Use a single shell command: '
@@ -114,17 +114,7 @@ def takeover_allows(payload,home,env):
 def evaluate(kind, payload, home=None, env=None):
     home = Path.home() if home is None else Path(home)
     env = os.environ if env is None else env
-    if env.get('HERDR_ENV') != '1':
-        if kind == 'prompt':
-            return {'hookSpecificOutput': {'hookEventName': 'UserPromptSubmit',
-                    'additionalContext': 'This chat is outside a Herdr-managed pane; NEPTUNE is installed but visible '
-                    'Herdr workers require an Orchestrator launched inside Herdr. '
-                    'For that workflow, open WezTerm, run neptune in the project directory, '
-                    'then run codex inside the resulting Herdr pane. Never fabricate pane '
-                    'context, control Herdr from this desktop chat, or substitute hidden workers. '
-                    'Authorized setup edits and offline checks may proceed here. Explain this '
-                    'boundary only when relevant; do not repeat an unavailable warning or keep '
-                    'rediscovering execution options on every request.'}}
+    if env.get('NEPTUNE_ACTIVE') != '1' or env.get('HERDR_ENV') != '1':
         return {}
     if not env.get('HERDR_PANE_ID'):
         raise ValueError('Herdr pane context is missing')

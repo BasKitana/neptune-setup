@@ -10,19 +10,24 @@ function neptune {
     $project = $PWD.ProviderPath
     $label = ((Split-Path $project -Leaf) -replace '[^a-zA-Z0-9_-]', '-').ToLowerInvariant()
     $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($project.ToLowerInvariant()))).Substring(0,8).ToLowerInvariant()
-    & herdr --session "neptune-$label-$hash"
+    $previousActive = $env:NEPTUNE_ACTIVE
+    try {
+        $env:NEPTUNE_ACTIVE = '1'
+        & herdr --session "neptune-$label-$hash"
+    } finally {
+        if ($null -eq $previousActive) { Remove-Item Env:NEPTUNE_ACTIVE -ErrorAction SilentlyContinue }
+        else { $env:NEPTUNE_ACTIVE = $previousActive }
+    }
 }
 function Set-NeptunePrelaunchName {
-    if ($env:HERDR_ENV -eq '1' -and $env:HERDR_PANE_ID) { python "$HOME/.local/share/neptune/herdr_agents.py" hook }
+    if ($env:NEPTUNE_ACTIVE -eq '1' -and $env:HERDR_ENV -eq '1' -and $env:HERDR_PANE_ID) { python "$HOME/.local/share/neptune/herdr_agents.py" hook }
 }
 function codex {
     Set-NeptunePrelaunchName
     $cli = Get-Command codex -CommandType Application -ErrorAction Stop | Select-Object -First 1
-    if ($args.Count -eq 0 -and -not $env:NEPTUNE_SUPERVISOR_PANE) {
-        & $cli.Source resume --last
-    } else {
-        & $cli.Source @args
-    }
+    if ($env:NEPTUNE_ACTIVE -eq '1' -and $env:HERDR_ENV -eq '1') {
+        & $cli.Source -c features.multi_agent=false @args
+    } else { & $cli.Source @args }
 }
 function claude {
     Set-NeptunePrelaunchName

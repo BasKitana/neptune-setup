@@ -19,7 +19,7 @@ class DelegationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
-        self.env = {'HERDR_ENV': '1', 'HERDR_PANE_ID': 'fixture-parent'}
+        self.env = {'NEPTUNE_ACTIVE': '1', 'HERDR_ENV': '1', 'HERDR_PANE_ID': 'fixture-parent'}
         self.helper = self.home / '.local/share/neptune/herdr_agents.py'
 
     def check_tool(self, name='Bash', command="touch 'hi .txt'", env=None):
@@ -96,20 +96,17 @@ class DelegationTests(unittest.TestCase):
         for tool in ['Agent', 'Task', 'spawn_agent']:
             self.denied(self.check_tool(tool, env=worker))
 
-    def test_desktop_prompt_explains_supported_entry_without_dead_end(self):
-        context = gate.evaluate('prompt', {}, self.home, {})['hookSpecificOutput']['additionalContext']
-        self.assertIn('open WezTerm, run neptune', context)
-        self.assertIn('then run codex', context)
-        self.assertIn('offline checks may proceed here', context)
-        self.assertIn('do not repeat', context)
-        self.assertNotIn('Use NEPTUNE for delegated execution', context)
+    def test_non_neptune_sessions_are_silent(self):
+        for env in ({}, {'HERDR_ENV': '1', 'HERDR_PANE_ID': 'other'}, {'NEPTUNE_ACTIVE': '1'}):
+            for kind in ('prompt', 'tool'):
+                self.assertEqual(gate.evaluate(kind, {}, self.home, env), {})
 
     def test_outside_herdr_does_not_control_a_session(self):
         with patch.object(agents, 'call') as call:
             self.assertEqual(self.check_tool(env={}), {})
             call.assert_not_called()
         with self.assertRaises(ValueError):
-            self.check_tool(env={'HERDR_ENV': '1'})
+            self.check_tool(env={'NEPTUNE_ACTIVE': '1', 'HERDR_ENV': '1'})
 
     def test_inspection_and_corrections_require_owned_workers(self):
         worker = self.worker()

@@ -27,6 +27,8 @@ function plan(kind, origin, platform, home) {
 }
 
 function run(kind, origin, options = {}) {
+  const env = options.env || process.env;
+  if (env.NEPTUNE_ACTIVE !== '1' || env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID) return 0;
   const warn = options.warn || ((message) => process.stderr.write(message + '\n'));
   const write = options.write || ((message) => process.stdout.write(message));
   const strict = kind === 'delegation-tool';

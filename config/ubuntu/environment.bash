@@ -12,24 +12,23 @@ neptune() {
     local label hash
     label="$(basename "$PWD" | tr -cs 'a-zA-Z0-9_-' '-' | cut -c1-24)"
     hash="$(printf '%s' "$PWD" | sha256sum | cut -c1-8)"
-    herdr --session "neptune-${label}-${hash}"
+    NEPTUNE_ACTIVE=1 herdr --session "neptune-${label}-${hash}"
 }
 _neptune_prelaunch_name() {
-    [[ "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" ]] || return 0
+    [[ "${NEPTUNE_ACTIVE:-}" == 1 && "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" ]] || return 0
     python3 "$HOME/.local/share/neptune/herdr_agents.py" hook
 }
 codex() {
     _neptune_prelaunch_name
-    # Explicit commands and supervised specialists must keep their launch arguments.
-    if [ "$#" -eq 0 ] && [ -z "${NEPTUNE_SUPERVISOR_PANE:-}" ]; then
-        command codex resume --last
+    if [[ "${NEPTUNE_ACTIVE:-}" == 1 && "${HERDR_ENV:-}" == 1 ]]; then
+        command codex -c features.multi_agent=false "$@"
     else
         command codex "$@"
     fi
 }
 claude() { _neptune_prelaunch_name; command claude "$@"; }
 neptune_project_title() {
-    [[ "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" && -n "${HERDR_WORKSPACE_ID:-}" && -n "${HERDR_TAB_ID:-}" ]] || return 0
+    [[ "${NEPTUNE_ACTIVE:-}" == 1 && "${HERDR_ENV:-}" == 1 && -n "${HERDR_PANE_ID:-}" && -n "${HERDR_WORKSPACE_ID:-}" && -n "${HERDR_TAB_ID:-}" ]] || return 0
     [[ -z "${NEPTUNE_SUPERVISOR_PANE:-}" && "${_NEPTUNE_TITLE_PWD:-}" != "$PWD" ]] || return 0
     local project title
     project="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)" || project="$PWD"
