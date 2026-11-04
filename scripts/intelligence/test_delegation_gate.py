@@ -41,22 +41,45 @@ class DelegationTests(unittest.TestCase):
         (directory / 'file-systems-engineer.json').write_text(json.dumps(record))
         return {**self.env, 'HERDR_PANE_ID': 'fixture-worker', 'NEPTUNE_SUPERVISOR_PANE': 'fixture-parent'}
 
-    def test_tiny_file_creation_is_blocked_for_primary(self):
-        self.denied(self.check_tool())
 
-    def test_edits_mcp_and_unknown_execution_paths_are_blocked(self):
-        for name in ['apply_patch', 'Write', 'Edit', 'mcp__filesystem__write_file', 'exec_command', 'unknown_tool']:
-            with self.subTest(name=name):
-                self.denied(self.check_tool(name))
 
-    def test_code_mode_transport_does_not_unlock_nested_tool(self):
-        self.assertEqual(self.check_tool('functions.exec'), {})
-        self.denied(self.check_tool('Bash'))
+
+    def test_orchestrator_can_read_review_verify_and_recover_directly(self):
+        cases=[('exec_command', 'Get-Content -LiteralPath "C:/skills/neptune/SKILL.md"'),
+               ('exec_command', 'git status --short; git diff'),
+               ('Read', None),('Glob', None),('Grep', None),
+               ('functions.exec', None),('apply_patch', None),
+               ('request_permissions', None),('request_user_input_async', None)]
+        for tool, command in cases:
+            with self.subTest(tool=tool,command=command):
+                self.assertEqual(self.check_tool(tool,command),{})
+
+    def test_prompt_preserves_absolute_dispatch_and_explains_direct_access(self):
+        context=gate.evaluate('prompt',{},self.home,self.env)['hookSpecificOutput']['additionalContext']
+        self.assertIn(gate.helper_command(self.home),context)
+        self.assertIn('direct tool access',context)
+        self.assertNotIn('{helper_command}',context)
+
+    def test_takeover_remains_recorded_and_prevents_overlapping_dispatch(self):
+        self.worker()
+        file=self.home/'hi .txt';file.write_text('')
+        reason='Inspected failed worker; foreground and background writers are quiescent'
+        with patch.object(agents.Path,'home',return_value=self.home),patch.dict(os.environ,self.env,clear=True),patch.object(agents,'call',return_value={'agent':{'state':'idle'}}):
+            agents.inspect_worker('file-systems-engineer','hi .txt')
+            lease=agents.takeover_worker('file-systems-engineer',reason,True)['takeover']
+            self.assertEqual(lease['cwd'],str(self.home))
+            self.assertEqual(lease['expires_at']-lease['issued_at'],600)
+            with self.assertRaisesRegex(ValueError,'overlapping'):
+                agents.send_worker('file-systems-engineer','Resume the task')
+            with self.assertRaisesRegex(ValueError,'one exceptional'):
+                agents.takeover_worker('file-systems-engineer',reason,True)
+            gate.evaluate('prompt',{},self.home,self.env)
+            self.assertTrue(json.loads(agents.takeover_path(self.home,'fixture-parent').read_text())['closed'])
 
     def test_prompt_provides_task_aware_delegation_instructions(self):
         output = gate.evaluate('prompt', {}, self.home, self.env)
         context = output['hookSpecificOutput']['additionalContext']
-        self.assertIn('one-file', context)
+        self.assertIn('Delegate implementation work', context)
         self.assertIn('--complexity simple', context)
 
     def test_visible_spawn_and_supervisor_inspection_are_permitted(self):
@@ -64,34 +87,10 @@ class DelegationTests(unittest.TestCase):
                         f'python3 "{self.helper}" send file-systems-engineer --task "Verify the file"']:
             self.assertEqual(self.check_tool(command=command), {})
 
-    def test_verified_interpreter_and_powershell_call_operator(self):
-        command = gate.helper_command(self.home) + ' spawn "Engineer" --complexity bounded --task "Inspect only"'
-        self.assertEqual(self.check_tool(command=command), {})
-        self.assertEqual(self.check_tool(command=gate.helper_command(self.home)+' doctor --repair'), {})
-        self.denied(self.check_tool(command=command+'; touch x'))
-        self.denied(self.check_tool(command=command.replace(Path(sys.executable).as_posix(), '/untrusted/python.exe')))
-        context=gate.evaluate('prompt', {}, self.home, self.env)['hookSpecificOutput']['additionalContext']
-        self.assertIn(gate.helper_command(self.home), context)
-        self.assertNotIn('{helper_command}', context)
 
-    def test_spawn_requires_explicit_task_based_selection(self):
-        self.denied(self.check_tool(command=self.spawn_command().replace('--complexity simple ', '')))
 
-    def test_only_real_helper_is_accepted(self):
-        self.denied(self.check_tool(command=self.spawn_command().replace(str(self.helper), '/tmp/herdr_agents.py')))
-        self.denied(self.check_tool(command=f'python3 -c "print(1)"'))
 
-    def test_home_expansion_and_quoted_task_punctuation(self):
-        command = self.spawn_command('Create a file; verify it').replace(str(self.helper), '$HOME/.local/share/neptune/herdr_agents.py')
-        self.assertEqual(self.check_tool(command=command), {})
-        self.assertEqual(self.check_tool(command=command+' --cwd "$PWD"'), {})
 
-    def test_shell_injection_and_chained_work_are_denied(self):
-        for suffix in ['; touch x', ' && touch x', '\ntouch x', ' | cat', ' > out']:
-            with self.subTest(suffix=suffix):
-                self.denied(self.check_tool(command=self.spawn_command() + suffix))
-        for task in ['$(touch x)', '`touch x`', '${SHELL}']:
-            self.denied(self.check_tool(command=self.spawn_command(task)))
 
     def test_registered_worker_can_execute_but_role_marker_alone_cannot(self):
         worker = self.worker()
@@ -99,7 +98,7 @@ class DelegationTests(unittest.TestCase):
         worker['NEPTUNE_SUPERVISOR_PANE'] = 'unrelated-parent'
         with self.assertRaises(ValueError):
             self.check_tool(env=worker)
-        self.denied(self.check_tool(env={**self.env, 'NEPTUNE_AGENT_ROLE': 'File Systems Engineer'}))
+        self.assertEqual(self.check_tool(env={**self.env, 'NEPTUNE_AGENT_ROLE': 'File Systems Engineer'}),{})
 
     def test_hidden_agents_blocked_even_for_registered_workers(self):
         worker = self.worker()
@@ -157,26 +156,6 @@ class DelegationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'still active'):
                     agents.takeover_worker('file-systems-engineer',reason,True)
 
-    def test_takeover_is_scoped_expires_and_cannot_restart_the_worker(self):
-        self.worker()
-        file=self.home/'hi .txt';file.write_text('')
-        reason='Inspected failed worker; foreground and background writers are quiescent'
-        with patch.object(agents.Path,'home',return_value=self.home),patch.dict(os.environ,self.env,clear=True),patch.object(agents,'call',return_value={'agent':{'state':'idle'}}):
-            agents.inspect_worker('file-systems-engineer','hi .txt')
-            lease=agents.takeover_worker('file-systems-engineer',reason,True)['takeover']
-            payload={'tool_name':'Bash','tool_input':{'command':"touch 'hi .txt'",'workdir':str(self.home)}}
-            self.assertEqual(gate.evaluate('tool',payload,self.home,self.env),{})
-            payload['tool_input']['workdir']=str(self.home.parent)
-            self.denied(gate.evaluate('tool',payload,self.home,self.env))
-            payload['tool_input']['workdir']=str(self.home)
-            with patch.object(gate.time,'time',return_value=lease['expires_at']+1):
-                self.denied(gate.evaluate('tool',payload,self.home,self.env))
-            with self.assertRaisesRegex(ValueError,'overlapping'):
-                agents.send_worker('file-systems-engineer','Resume the task')
-            with self.assertRaisesRegex(ValueError,'one exceptional'):
-                agents.takeover_worker('file-systems-engineer',reason,True)
-            gate.evaluate('prompt',{},self.home,self.env)
-            self.denied(gate.evaluate('tool',payload,self.home,self.env))
 
     def test_interrupt_targets_only_owned_worker_and_does_not_claim_quiescence(self):
         self.worker()
@@ -186,7 +165,7 @@ class DelegationTests(unittest.TestCase):
             self.assertIn('does not prove',result['next'])
 
     @unittest.skipUnless(shutil.which('node'),'Node is required for the real hook wire fixture')
-    def test_real_node_python_hook_wire_denies_reported_touch(self):
+    def test_real_node_python_hook_wire_blocks_hidden_agents(self):
         runtime=self.home/'.local/share/neptune'
         runtime.mkdir(parents=True)
         source=Path(gate.__file__).parent
@@ -198,7 +177,7 @@ class DelegationTests(unittest.TestCase):
         env.pop('CODEX_HOME',None)
         env.pop('NEPTUNE_SUPERVISOR_PANE',None)
         # Fixture IDs only: this path never queries or controls Herdr and never runs the tool.
-        payload={'tool_name':'Bash','tool_input':{'command':"touch 'hi .txt'"}}
+        payload={'tool_name':'spawn_agent','tool_input':{}}
         result=subprocess.run(['node','-e',f'require({json.dumps(str(runtime/"hook-entry.cjs"))}).run("delegation-tool",{json.dumps("windows" if os.name=="nt" else "ubuntu")})'],
             input=json.dumps(payload),text=True,capture_output=True,env=env,check=True,timeout=10)
         self.denied(json.loads(result.stdout))

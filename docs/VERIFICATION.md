@@ -37,3 +37,7 @@ Takeover fixtures also check refusal without inspection/quiescence, refusal whil
 ## Runtime recovery regression checks
 
 The suite now covers absolute-interpreter dispatch with PowerShell’s call operator, denial of alternate interpreters and chained commands, Python alias repair, exact-bundle Codex helper repair, rejection of mismatching helpers, idempotent repair, and preservation of failed launch records. The real Node-to-Python denial fixture runs on Windows as well as Linux using synthetic IDs and never controls Herdr. Actual worker creation, model access and completion delivery still require a real NEPTUNE pane.
+
+## Current Orchestrator access policy
+
+The former blanket direct-tool deny policy is superseded: Orchestrator instruction reads, planning, coordination, review, verification and diagnostics are allowed. Regression checks now verify those paths, hidden-agent rejection, worker identity checks, recorded takeover constraints, and explicit destination opt-in for full local worker tools. Native platform permissions remain authoritative. Earlier descriptions of blocking every direct tool reflect the previous policy.

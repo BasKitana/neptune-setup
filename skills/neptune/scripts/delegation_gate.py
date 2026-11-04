@@ -2,13 +2,11 @@
 import json
 import os
 from pathlib import Path
-import shlex
 import sys
-import time
 
 
 GUIDANCE = (
-    'Active NEPTUNE session (NEPTUNE_ACTIVE=1 in a real Herdr pane). Apply the NEPTUNE workflow. You are the Orchestrator. Delegate executable work, including one-file tasks, to a visible '
+    'Active NEPTUNE session (NEPTUNE_ACTIVE=1 in a real Herdr pane). Apply the NEPTUNE workflow. You are the Orchestrator. You have direct tool access for planning, reading instructions, worker management, review, verification, and recovery. Delegate implementation work to a visible '
     'Herdr specialist. Choose its role and complexity from the task; the helper selects an '
     'available economical model/effort (simple: Luna low; bounded: Luna medium; complex: Luna high; '
     'sensitive: GPT-6 Sol high). Do not change your own model. Use a single shell command: '
@@ -62,70 +60,6 @@ def worker_record(home, env):
     raise ValueError('Supervised pane has no matching registered NEPTUNE worker record')
 
 
-def coordination_command(command, home, cwd):
-    if not isinstance(command, str) or any(c in command for c in '\n\r`'):
-        return False
-    # Do not accept shell substitutions, prefixes, chaining, redirections or alternate scripts.
-    command = command.replace('$HOME/.local/share/neptune/herdr_agents.py',
-                              str(home / '.local/share/neptune/herdr_agents.py'))
-    for token in ('"$PWD"', '"${PWD}"'):
-        command=command.replace(token, '"'+cwd+'"')
-    if '$' in command:
-        return False
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-    lexer.whitespace_split = True
-    lexer.commenters = ''
-    args = list(lexer)
-    # PowerShell needs its call operator for a quoted executable path.
-    if os.name == 'nt' and args[:1] == ['&']:
-        args = args[1:]
-    if len(args) < 3 or any(token and all(c in ';&|<>()' for c in token) for token in args):
-        return False
-    if args[0] not in ('python', 'python3', '/usr/bin/python3') and Path(args[0]).resolve() != Path(sys.executable).resolve():
-        return False
-    if Path(args[1]).expanduser().resolve() != (home / '.local/share/neptune/herdr_agents.py').resolve():
-        return False
-    # Parsing validates the complete argv, not just a substring that could hide a second command.
-    from herdr_agents import make_parser
-    if args[2] not in ('spawn', 'inspect', 'send', 'interrupt', 'takeover', 'finish-takeover', 'doctor') or any(a in ('-h', '--help') for a in args[3:]):
-        return False
-    try:
-        make_parser().parse_args(args[2:])
-    except SystemExit:
-        return False
-    if args[2] == 'spawn' and not any(a in ('--complexity', '--model') for a in args[3:]):
-        return False
-    return True
-
-
-def takeover_allows(payload,home,env):
-    from herdr_agents import takeover_path
-    path=takeover_path(home,env['HERDR_PANE_ID'])
-    if not path.exists():
-        return False
-    lease=json.loads(path.read_text(encoding='utf-8'))
-    if lease.get('closed') or lease.get('expires_at',0)<=time.time() or lease.get('supervisor_pane')!=env['HERDR_PANE_ID']:
-        return False
-    root=Path(lease['cwd']).resolve()
-    args=payload.get('tool_input') or {}
-    if not isinstance(args,dict):
-        return False
-    cwd=Path(args.get('workdir') or args.get('cwd') or payload.get('cwd') or '').resolve()
-    if not cwd.is_relative_to(root):
-        return False
-    tool=payload.get('tool_name')
-    if tool in ('Bash','PowerShell','exec_command'):
-        return True
-    if tool in ('Write','Edit'):
-        return (cwd/args.get('file_path','')).resolve().is_relative_to(root)
-    if tool=='apply_patch':
-        patch=args.get('command',args.get('patch',''))
-        paths=[line.split(': ',1)[1] for line in patch.splitlines()
-               if line.startswith(('*** Add File: ','*** Update File: ','*** Delete File: ','*** Move to: '))]
-        return bool(paths) and all((cwd/p).resolve().is_relative_to(root) for p in paths)
-    return False
-
-
 def evaluate(kind, payload, home=None, env=None):
     home = Path.home() if home is None else Path(home)
     env = os.environ if env is None else env
@@ -147,19 +81,9 @@ def evaluate(kind, payload, home=None, env=None):
     tool = payload.get('tool_name')
     if tool in ('Agent', 'Task', 'spawn_agent', 'send_input', 'resume_agent'):
         return deny('Hidden agents are disabled. Use visible NEPTUNE Herdr specialists.')
-    if worker:
-        return {}
-    if takeover_allows(payload,home,env):
-        return {}
-    # Native Codex code-mode wrappers have no OS access; their nested tool calls are gated again.
-    if tool in ('exec', 'functions.exec', 'update_plan', 'AskUserQuestion', 'request_user_input', 'EnterPlanMode', 'ExitPlanMode'):
-        return {}
-    args = payload.get('tool_input') or {}
-    if tool in ('Bash', 'PowerShell', 'exec_command') and isinstance(args, dict):
-        cwd=args.get('workdir') or args.get('cwd') or payload.get('cwd') or str(Path.cwd())
-        if coordination_command(args.get('command', args.get('cmd')), home, cwd):
-            return {}
-    return deny('NEPTUNE delegation required: direct Orchestrator tool execution is blocked. ' + guidance(home))
+    # Delegation is a workflow instruction, not a blanket denial of Orchestrator tools.
+    # Native platform permissions remain authoritative for every caller.
+    return {}
 
 
 def main():

@@ -183,6 +183,8 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
             raise ValueError('Human approval required before starting this worker: '+json.dumps(selection))
         native_args=['--no-daemon','-c','features.multi_agent=false','--model',selection['model'],'-c','model_reasoning_effort='+json.dumps(selection['effort']),
                      '-c','service_tier="default"']
+        if os.environ.get('NEPTUNE_FULL_ACCESS') == '1':
+            native_args += ['--sandbox', 'danger-full-access']
     else:
         if not model or not effort or not reason:
             raise ValueError('Claude requires an explicit CLI-supported model, effort and task-based reason; no automatic provider fallback')
@@ -191,7 +193,9 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
         native_args=['--model',model,'--effort',effort]
     name('Orchestrator')
     created=call(['tab','create','--workspace',workspace,'--cwd',str(project),'--label',role,
-                  '--env','NEPTUNE_ACTIVE=1','--env','NEPTUNE_AGENT_ROLE='+role,'--env','NEPTUNE_SUPERVISOR_PANE='+parent,
+                  '--env','NEPTUNE_ACTIVE=1',
+                  *(['--env','NEPTUNE_FULL_ACCESS=1'] if os.environ.get('NEPTUNE_FULL_ACCESS')=='1' else []),
+                  '--env','NEPTUNE_AGENT_ROLE='+role,'--env','NEPTUNE_SUPERVISOR_PANE='+parent,
                   '--env','NEPTUNE_WORKER_MODEL='+selection['model'],
                   '--env','NEPTUNE_WORKER_EFFORT='+selection['effort'],'--no-focus'])
     pane=created['root_pane']['pane_id']

@@ -114,11 +114,26 @@ class VisibleAgentTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort="medium"',start)
         self.assertIn('service_tier="default"',start)
         self.assertIn('--no-daemon',start)
+        self.assertNotIn('--sandbox',start)
         self.assertIn('features.multi_agent=false',start)
         created=next(args for args in seen if args[:2]==['tab','create'])
         self.assertIn('NEPTUNE_ACTIVE=1',created)
         self.assertEqual(result['selection']['model'],'gpt-6-luna')
         self.assertTrue(Path(result['record_file']).is_file())
+
+    def test_full_local_tools_require_destination_opt_in(self):
+        env={'HERDR_ENV':'1','HERDR_PANE_ID':'fixture-parent','HERDR_WORKSPACE_ID':'fixture-workspace','NEPTUNE_FULL_ACCESS':'1'}
+        calls=[]
+        def fake(args):
+            calls.append(args)
+            if args[:2]==['tab','create']: return {'tab':{'tab_id':'fixture-tab'},'root_pane':{'pane_id':'fixture-worker'}}
+            if args[:2]==['agent','list']: return {'agents':[{'pane_id':'fixture-worker'}]}
+            return {}
+        with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',side_effect=fake):
+            agents.spawn('QA Engineer','codex','Inspect fixture',str(Path.cwd()))
+        start=next(a for a in calls if a[:2]==['agent','start'])
+        self.assertEqual(start[start.index('--sandbox')+1],'danger-full-access')
+        self.assertIn('NEPTUNE_FULL_ACCESS=1',next(a for a in calls if a[:2]==['tab','create']))
 
     def test_codex_stays_interactive_and_uses_requested_model(self):
         env={'HERDR_ENV':'1','HERDR_PANE_ID':'p1','HERDR_WORKSPACE_ID':'w1'}
