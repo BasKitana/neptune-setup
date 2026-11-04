@@ -112,8 +112,62 @@ def report_hook():
         print('NEPTUNE worker report hook: '+str(error),file=sys.stderr)
 
 
+def runtime_doctor(repair=False, root=None, codex_home=None):
+    """Repair only missing files in NEPTUNE's own optional portable runtime."""
+    root = Path(root) if root is not None else Path(__file__).resolve().parent
+    runtime = root / 'runtimes'
+    result = {'healthy': True, 'repairs': [], 'errors': []}
+    if not runtime.is_dir():
+        result['portable_runtime'] = 'not used on this installation'
+        return result
+    python_dir = runtime / 'python-3.13.18'
+    python = python_dir / 'python.exe'
+    alias = python_dir / 'python3.exe'
+    if python.is_file() and not alias.exists() and repair:
+        try:
+            shutil.copy2(python, alias)
+            result['repairs'].append(str(alias))
+        except OSError as error:
+            result['errors'].append('Python alias repair failed: ' + str(error))
+    if not python.is_file():
+        result['errors'].append('Portable Python is missing: ' + str(python))
+    if not alias.is_file():
+        result['errors'].append('Portable python3 alias is missing; use doctor --repair')
+    codex = runtime / 'codex'
+    exe = codex / 'codex.exe'
+    missing = [name for name in ('codex-command-runner.exe', 'codex-windows-sandbox-setup.exe')
+               if not (codex / name).is_file()]
+    if not exe.is_file():
+        result['errors'].append('Portable Codex is missing: ' + str(exe))
+    elif missing and repair:
+        home = Path(codex_home or os.environ.get('CODEX_HOME') or Path.home() / '.codex')
+        try:
+            with exe.open('rb') as stream:
+                digest = hashlib.file_digest(stream, 'sha256').digest()
+            for source in sorted((home / 'packages/app-server-daemon/releases').glob('*/bin/codex.exe')):
+                with source.open('rb') as stream:
+                    if hashlib.file_digest(stream, 'sha256').digest() != digest:
+                        continue
+                resources = source.parent.parent / 'codex-resources'
+                for filename in missing:
+                    if (resources / filename).is_file():
+                        shutil.copy2(resources / filename, codex / filename)
+                        result['repairs'].append(str(codex / filename))
+                break
+        except OSError as error:
+            result['errors'].append('Matching Codex helper repair failed: ' + str(error))
+    for filename in missing:
+        if not (codex / filename).is_file():
+            result['errors'].append('Missing matching Codex helper: ' + filename)
+    result['healthy'] = not result['errors']
+    return result
+
+
 def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',attempts=0,reason=None,approval=None):
     parent=require_herdr()
+    runtime = runtime_doctor(repair=True)
+    if not runtime['healthy']:
+        raise ValueError('Runtime preflight failed before worker creation: '+json.dumps(runtime))
     role=role_text(role)
     if harness not in ('codex','claude'): raise ValueError('Use codex or claude; OpenCode was removed by the user')
     if not task.strip(): raise ValueError('An explicit task is required')
@@ -153,7 +207,14 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
     record_file=record_dir/(identifier+'.json')
     record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
     # Leave the visible pane intact on a refused/failed launch; never hide failure by deleting it.
-    started=call(launch)
+    try:
+        started=call(launch)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        record['launch_state']='launch failed; inspect preserved pane before retrying'
+        record['last_error']=str(error)
+        record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
+        raise ValueError(f'Worker {identifier}, pane {pane}, record {record_file}: {error}. '
+                         'Inspect this worker before retrying; no replacement was launched.') from error
     record['launch_state']='interactive CLI detected; actual model/effort still require UI verification'
     record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
     label(pane,role)
@@ -296,6 +357,7 @@ def make_parser():
     sub=commands.add_parser('name');sub.add_argument('role')
     commands.add_parser('hook')
     commands.add_parser('report-hook')
+    sub=commands.add_parser('doctor');sub.add_argument('--repair',action='store_true')
     sub=commands.add_parser('spawn');sub.add_argument('role')
     sub.add_argument('--harness',choices=['codex','claude'],default='codex')
     sub.add_argument('--task',required=True);sub.add_argument('--cwd',default=str(Path.cwd()))
@@ -318,6 +380,11 @@ def main():
     parser=make_parser()
     args=parser.parse_args()
     try:
+        if args.command=='doctor':
+            result=runtime_doctor(args.repair)
+            print(json.dumps(result,indent=2))
+            if not result['healthy']: parser.exit(2,'NEPTUNE runtime checks failed\n')
+            return
         if args.command=='hook': hook();return
         if args.command=='report-hook': report_hook();print('{}');return
         if args.command=='name': result=name(args.role)

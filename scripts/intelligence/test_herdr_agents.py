@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -208,6 +209,55 @@ class VisibleAgentTests(unittest.TestCase):
             agents.hook()
             self.assertIn('Orchestrator',call.call_args.args[0])
             self.assertNotIn('Old Role',call.call_args.args[0])
+
+
+class RuntimeRepairTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name)
+        self.python=self.root/'runtimes/python-3.13.18'
+        self.codex=self.root/'runtimes/codex'
+        self.python.mkdir(parents=True)
+        self.codex.mkdir()
+        (self.python/'python.exe').write_bytes(b'fixture-python')
+        (self.codex/'codex.exe').write_bytes(b'fixture-codex')
+        self.source=self.root/'home/packages/app-server-daemon/releases/fixture'
+        (self.source/'bin').mkdir(parents=True)
+        (self.source/'codex-resources').mkdir()
+        (self.source/'bin/codex.exe').write_bytes(b'fixture-codex')
+        for name in ('codex-command-runner.exe','codex-windows-sandbox-setup.exe'):
+            (self.source/'codex-resources'/name).write_bytes(b'fixture-helper')
+
+    def test_repairs_missing_runtime_files_once_from_matching_bundle(self):
+        home=self.root/'home'
+        self.assertFalse(agents.runtime_doctor(root=self.root,codex_home=home)['healthy'])
+        result=agents.runtime_doctor(True,self.root,home)
+        self.assertTrue(result['healthy'],result)
+        self.assertEqual(len(result['repairs']),3)
+        self.assertEqual((self.python/'python3.exe').read_bytes(),b'fixture-python')
+        self.assertEqual(agents.runtime_doctor(True,self.root,home)['repairs'],[])
+
+    def test_refuses_mismatching_helpers_without_changing_existing_files(self):
+        (self.source/'bin/codex.exe').write_bytes(b'wrong-version')
+        result=agents.runtime_doctor(True,self.root,self.root/'home')
+        self.assertFalse(result['healthy'])
+        self.assertFalse((self.codex/'codex-command-runner.exe').exists())
+        self.assertEqual((self.codex/'codex.exe').read_bytes(),b'fixture-codex')
+
+    def test_failed_launch_preserves_identifier_and_error_for_inspection(self):
+        def fake(args):
+            if args[:2]==['tab','create']: return {'tab':{'tab_id':'fixture-tab'},'root_pane':{'pane_id':'fixture-worker'}}
+            if args[:2]==['agent','start']: raise ValueError('fixture startup failure')
+            return {}
+        env={'HERDR_ENV':'1','HERDR_PANE_ID':'fixture-parent','HERDR_WORKSPACE_ID':'fixture-workspace'}
+        with patch.object(agents.Path,'home',return_value=self.root),patch.dict(os.environ,env,clear=True),patch.object(agents.worker_models,'load_catalogue',return_value=catalogue()),patch.object(agents,'call',side_effect=fake),patch.object(agents,'runtime_doctor',return_value={'healthy':True}):
+            with self.assertRaisesRegex(ValueError,'Inspect this worker before retrying'):
+                agents.spawn('QA Engineer','codex','Review fixture',str(self.root))
+        record=json.loads(next((self.root/'.local/state/neptune/workers').glob('*.json')).read_text())
+        self.assertEqual(record['pane'],'fixture-worker')
+        self.assertIn('launch failed',record['launch_state'])
+        self.assertEqual(record['last_error'],'fixture startup failure')
 
 
 if __name__=='__main__': unittest.main()

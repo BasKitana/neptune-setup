@@ -64,6 +64,16 @@ class DelegationTests(unittest.TestCase):
                         f'python3 "{self.helper}" send file-systems-engineer --task "Verify the file"']:
             self.assertEqual(self.check_tool(command=command), {})
 
+    def test_verified_interpreter_and_powershell_call_operator(self):
+        command = gate.helper_command(self.home) + ' spawn "Engineer" --complexity bounded --task "Inspect only"'
+        self.assertEqual(self.check_tool(command=command), {})
+        self.assertEqual(self.check_tool(command=gate.helper_command(self.home)+' doctor --repair'), {})
+        self.denied(self.check_tool(command=command+'; touch x'))
+        self.denied(self.check_tool(command=command.replace(Path(sys.executable).as_posix(), '/untrusted/python.exe')))
+        context=gate.evaluate('prompt', {}, self.home, self.env)['hookSpecificOutput']['additionalContext']
+        self.assertIn(gate.helper_command(self.home), context)
+        self.assertNotIn('{helper_command}', context)
+
     def test_spawn_requires_explicit_task_based_selection(self):
         self.denied(self.check_tool(command=self.spawn_command().replace('--complexity simple ', '')))
 
@@ -175,7 +185,7 @@ class DelegationTests(unittest.TestCase):
             self.assertEqual(call.call_args.args[0],['agent','send-keys','file-systems-engineer','ctrl+c'])
             self.assertIn('does not prove',result['next'])
 
-    @unittest.skipUnless(os.name!='nt' and shutil.which('node'),'Native Node/Python wire fixture uses Linux HOME')
+    @unittest.skipUnless(shutil.which('node'),'Node is required for the real hook wire fixture')
     def test_real_node_python_hook_wire_denies_reported_touch(self):
         runtime=self.home/'.local/share/neptune'
         runtime.mkdir(parents=True)
@@ -183,11 +193,13 @@ class DelegationTests(unittest.TestCase):
         for script in source.iterdir():
             if script.suffix in ('.py','.cjs'):
                 shutil.copy2(script,runtime/script.name)
-        env={**os.environ,'HOME':str(self.home),**self.env}
+        env={**os.environ,'HOME':str(self.home),'USERPROFILE':str(self.home),**self.env}
+        env['PATH']=str(Path(sys.executable).parent)+os.pathsep+env.get('PATH','')
+        env.pop('CODEX_HOME',None)
         env.pop('NEPTUNE_SUPERVISOR_PANE',None)
         # Fixture IDs only: this path never queries or controls Herdr and never runs the tool.
         payload={'tool_name':'Bash','tool_input':{'command':"touch 'hi .txt'"}}
-        result=subprocess.run(['node','-e',f'require({json.dumps(str(runtime/"hook-entry.cjs"))}).run("delegation-tool","ubuntu")'],
+        result=subprocess.run(['node','-e',f'require({json.dumps(str(runtime/"hook-entry.cjs"))}).run("delegation-tool",{json.dumps("windows" if os.name=="nt" else "ubuntu")})'],
             input=json.dumps(payload),text=True,capture_output=True,env=env,check=True,timeout=10)
         self.denied(json.loads(result.stdout))
         self.assertFalse((self.home/'hi .txt').exists())

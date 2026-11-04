@@ -10,12 +10,14 @@ function plan(kind, origin, platform, home) {
   const windows = platform === 'win32';
   if ((origin === 'windows') !== windows) return null;
   const join = (windows ? path.win32 : path.posix).join;
+  const portablePython = join(home, '.local', 'share', 'neptune', 'runtimes', 'python-3.13.18', 'python.exe');
+  const python = windows && fs.existsSync(portablePython) ? portablePython : (windows ? 'python' : 'python3');
   if (kind.startsWith('delegation-')) return {
-    command: windows ? 'python' : 'python3',
+    command: python,
     args: [join(home, '.local', 'share', 'neptune', 'delegation_gate.py'), kind.slice('delegation-'.length)],
   };
   if (kind === 'name' || kind === 'worker-stop') return {
-    command: windows ? 'python' : 'python3',
+    command: python,
     args: [join(home, '.local', 'share', 'neptune', 'herdr_agents.py'), kind === 'name' ? 'hook' : 'report-hook'],
   };
   const script = kind === 'codex-session'

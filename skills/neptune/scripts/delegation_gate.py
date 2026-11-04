@@ -12,16 +12,28 @@ GUIDANCE = (
     'Herdr specialist. Choose its role and complexity from the task; the helper selects an '
     'available economical model/effort (simple: Luna low; bounded: Luna medium; complex: Luna high; '
     'sensitive: GPT-6 Sol high). Do not change your own model. Use a single shell command: '
-    'python3 "$HOME/.local/share/neptune/herdr_agents.py" spawn "File Systems Engineer" '
+    '{helper_command} spawn "File Systems Engineer" '
     '--complexity simple --cwd "<actual directory>" --task "<task and acceptance checks>". '
     'Use inspect NAME [--file PATH] to review actual evidence and send NAME --task "..." for '
-    'corrections or suitable idle-worker reuse. Keep chats visible. Report a real blocker if '
+    'corrections or suitable idle-worker reuse. Use doctor --repair for bounded runtime recovery before retrying a failed launch; never retry a submitted task blindly. Keep chats visible. Report a real blocker if '
     'launch fails; do not silently perform the task yourself. Only a rare stalled-worker takeover '
     'may use interrupt NAME, inspect NAME, then takeover NAME --reason "specific stall evidence" '
     '--quiescent after verifying no writer remains. The one-task lease lasts at most ten minutes '
     'and ends on a new user prompt; close it with finish-takeover. Conversational answers need no worker. '
     'Worker completion reports are coordination: inspect the existing worker, not a new duplicate.'
 )
+
+
+def helper_command(home=None):
+    home = Path.home() if home is None else Path(home)
+    helper = (home / '.local/share/neptune/herdr_agents.py').as_posix()
+    if os.name == 'nt':
+        return f'& "{Path(sys.executable).as_posix()}" "{helper}"'
+    return f'"{Path(sys.executable).as_posix()}" "{helper}"'
+
+
+def guidance(home):
+    return GUIDANCE.replace('{helper_command}', helper_command(home))
 
 
 def deny(reason):
@@ -64,15 +76,18 @@ def coordination_command(command, home, cwd):
     lexer.whitespace_split = True
     lexer.commenters = ''
     args = list(lexer)
+    # PowerShell needs its call operator for a quoted executable path.
+    if os.name == 'nt' and args[:1] == ['&']:
+        args = args[1:]
     if len(args) < 3 or any(token and all(c in ';&|<>()' for c in token) for token in args):
         return False
-    if args[0] not in ('python', 'python3', '/usr/bin/python3'):
+    if args[0] not in ('python', 'python3', '/usr/bin/python3') and Path(args[0]).resolve() != Path(sys.executable).resolve():
         return False
     if Path(args[1]).expanduser().resolve() != (home / '.local/share/neptune/herdr_agents.py').resolve():
         return False
     # Parsing validates the complete argv, not just a substring that could hide a second command.
     from herdr_agents import make_parser
-    if args[2] not in ('spawn', 'inspect', 'send', 'interrupt', 'takeover', 'finish-takeover') or any(a in ('-h', '--help') for a in args[3:]):
+    if args[2] not in ('spawn', 'inspect', 'send', 'interrupt', 'takeover', 'finish-takeover', 'doctor') or any(a in ('-h', '--help') for a in args[3:]):
         return False
     try:
         make_parser().parse_args(args[2:])
@@ -128,7 +143,7 @@ def evaluate(kind, payload, home=None, env=None):
                 lease['closed']=True
                 path.write_text(json.dumps(lease,indent=2),encoding='utf-8')
         return {} if worker else {'hookSpecificOutput': {
-            'hookEventName': 'UserPromptSubmit', 'additionalContext': GUIDANCE}}
+            'hookEventName': 'UserPromptSubmit', 'additionalContext': guidance(home)}}
     tool = payload.get('tool_name')
     if tool in ('Agent', 'Task', 'spawn_agent', 'send_input', 'resume_agent'):
         return deny('Hidden agents are disabled. Use visible NEPTUNE Herdr specialists.')
@@ -144,7 +159,7 @@ def evaluate(kind, payload, home=None, env=None):
         cwd=args.get('workdir') or args.get('cwd') or payload.get('cwd') or str(Path.cwd())
         if coordination_command(args.get('command', args.get('cmd')), home, cwd):
             return {}
-    return deny('NEPTUNE delegation required: direct Orchestrator tool execution is blocked. ' + GUIDANCE)
+    return deny('NEPTUNE delegation required: direct Orchestrator tool execution is blocked. ' + guidance(home))
 
 
 def main():
