@@ -1,5 +1,3 @@
-# Merge only these keys into the existing [features] table. Do not replace config.toml.
+# Merge into the existing features table; preserve user settings.
 [features]
 hooks = true
-
-# NEPTUNE launchers pass -c features.multi_agent=false per session.

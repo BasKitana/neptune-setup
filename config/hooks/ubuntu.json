@@ -5,8 +5,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','ubuntu')\"",
-            "timeout": 8
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('codex-session','ubuntu')\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','ubuntu','codex')\"",
+            "timeout": 10
           }
         ]
       }
@@ -16,17 +25,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','ubuntu')\"",
-            "timeout": 8
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('delegation-prompt','ubuntu')\"",
-            "timeout": 8
+            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','ubuntu','codex')\"",
+            "timeout": 10
           }
         ]
       }
@@ -37,19 +37,7 @@
           {
             "type": "command",
             "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('worker-stop','ubuntu')\"",
-            "timeout": 8
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('delegation-tool','ubuntu')\"",
-            "timeout": 8
+            "timeout": 10
           }
         ]
       }

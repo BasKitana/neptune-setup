@@ -1,75 +1,23 @@
-# Destination setup details
+# NEPTUNE v2 setup
 
-## Platform and paths
+Use the existing Windows WezTerm + PowerShell + Herdr installation. Preserve actual paths, runtime binaries, helper matching, profiles, project directories, native integrations, sign-ins, and trust. Merge config instead of overwriting unrelated settings. This repository's templates are not an automatic installer.
 
-Native Windows is supported through WezTerm + PowerShell + Herdr. FirstMate's live backend on the source PC was Ubuntu; do not claim Windows support or port it. Reuse an existing requested Ubuntu environment if present; otherwise leave FirstMate unsupported and keep the visible Herdr workflow. Do not install WSL just to satisfy this package.
+## Task tracking and memory
 
-Resolve the real shell profile (including all-host PowerShell profile), executable PATH, Projects directory and HERDR_CONFIG_PATH. Herdr Windows defaults to APPDATA/herdr/config.toml, but the shell template explicitly selects ~/.config/herdr/config.toml. Configure the path actually used by the active client. Merge TOML/JSON sections; never append duplicate table declarations.
+FirstMate is the only task authority on hosts where its upstream runtime is installed and supported. Require the actual FM_HOME and installed instructions; retain task IDs, briefs, inboxes, worktrees, and recovery/session references. A compact current brief contains goal, decisions, relevant files, verified check/revision, blocker, next action. Load history only when needed. NEPTUNE diagnostic artifacts track launches/output, not a parallel backlog.
 
-Install/reuse core tools from sources.json. Git, Python 3.11+ and Node.js are prerequisites. Use official signed packages where possible; verify publisher hashes and obtain destination approval for unfamiliar unsigned releases. Do not disable security protections.
+This Windows host has no configured FirstMate home. The previous package only established an Ubuntu backend, and there is no user Ubuntu distribution here. FirstMate live integration is unavailable, not verified. Do not install WSL/Docker, port FirstMate, or recreate its task engine. Direct AI work and optional Herdr workers do not require FirstMate. Preserve the legacy neptune.py and governance.sqlite3 data for existing history; stop using them for new task administration.
 
-## Runtime and skills
+## Permissions and sessions
 
-Copy all five files from skills/neptune/scripts into ~/.local/share/neptune/. Preserve names. The helpers are standard-library Python and Node.js; they use the real installed herdr executable, not a fake HERDR_ENV. Install skills/neptune into the canonical shared collection and configure Codex/Claude discovery with documented paths or supported links. Install other requested skills from publishers rather than copying opaque plugin caches; install only grill-me from its collection. Verify name, description, source, discovery and actual loading for each agent.
+Full local tool access is the user-requested default inside NEPTUNE for both main CLIs and optional workers. Codex uses --sandbox danger-full-access --ask-for-approval never; Claude uses --permission-mode bypassPermissions. The setting is scoped to active NEPTUNE/Herdr launches. NEPTUNE_FULL_ACCESS=0 retains native defaults; explicit CLI permission flags take precedence. Native managed restrictions remain authoritative. Other destinations must authorize their own permissions; this does not authorize new API spending, credentials, publication, or deployment.
 
-Merge config/GLOBAL-AGENTS.md into Codex's global AGENTS.md and Claude's global CLAUDE.md. The exact destination instructions take precedence. Merge config/codex-features.toml without changing the Orchestrator's model/effort, existing authentication, project trust or unrelated settings. Permission settings need destination authorization; no YOLO configuration is bundled.
+Keep native session commands (`codex resume`, `claude --continue` / `--resume`) and current history. Bare CLI invocation retains native behavior. Do not copy session stores or auth through Git. Keep Herdr restore settings, clipboard, navigation, and the existing sidebar unchanged. CLI names update at session start and every prompt; task roles can remain in worker tab labels.
 
-Run Herdr's supported official Codex/Claude integration installation first. Read its current help. Preserve official state/session scripts. Merge config/hooks/windows.json or ubuntu.json into each applicable hooks configuration; preserve other handlers. The Node entry skips foreign-host commands when Windows config is discovered from Ubuntu. Stop hooks return valid JSON and do not block prompts on optional reporting failures. Trust prompts may need legitimate user confirmation; do not alter stored trust hashes automatically.
+## Hooks and runtime
 
-## Shell and window
+Keep official Herdr session-state scripts. Merge windows.json / ubuntu.json for Codex and the corresponding -claude.json for Claude. Preserve unrelated hooks and native trust; remove retired NEPTUNE delegation handlers. Naming and worker reports are optional/nonblocking. Worker Stop reports are bounded evidence for review, not automatic success or acknowledgment loops. Install all current runtime scripts together. Existing portable Python/Codex repairs are bounded and local; do not download or replace credentials during repair.
 
-Windows: preserve the existing profile, store config/windows/profile.ps1 under ~/.config/neptune/profile.ps1, and dot-source it from the actual PowerShell 7 profile. Ensure pwsh.exe, herdr, Python, Node and agent CLIs are on PATH. Set NEPTUNE_PROJECTS to the selected existing directory. config/wezterm-windows.lua starts the loaded shell with neptune; merge appearance and bindings instead of overwriting other WezTerm customizations.
+## Usage
 
-Ubuntu: store config/ubuntu/environment.bash under ~/.config/neptune/environment.bash, source it from interactive ~/.bashrc, and install config/ubuntu/neptune as executable ~/.local/bin/neptune. Set NEPTUNE_PROJECTS before sourcing. Do not change a global login shell or force every worktree pane into Projects. The prompt hook names the main Space/tab after the Git root or current folder; specialist tabs keep role names. config/wezterm-ubuntu.lua is for Windows WezTerm targeting an existing WSL distribution: change WSL:Ubuntu to the actual name. Native Linux WezTerm needs a local-domain launch command instead, which the destination AI must configure from its supported API.
-
-WezTerm should open NEPTUNE with no coding agent automatically started. Closing/detaching its window normally leaves Herdr server processes alive; restarting the OS/server does not. resume_agents_on_restore remains false. Verify real reattachment; do not terminate an existing server just for a test.
-
-## Usage and voice
-
-$role is custom metadata published by the adapter; $limit comes from a supported usage plugin. Missing metadata disappears. Without a supported monitor, only the role row may show. Never manufacture quota or reset figures. Install a usage monitor only on officially supported hosts, with approval for background monitoring/credential metadata; keep browser-cookie import disabled. Prefer official CLI /status or /usage where needed. Context is not subscription allowance.
-
-Handy is the source's chosen local Windows dictation tool, replacing inactive OpenWhisper. If requested and supported, install from the official publisher, configure local inference, zero retained history, no automatic recording, microphone selection and Ctrl+Alt+M. Check terminal/editor insertion, English and optional Arabic. Do not copy source audio or recording history. Dictation/GPU performance is hardware-dependent.
-
-Ollama is optional direct local inference, not an OpenCode replacement. Keep cloud disabled and bind to loopback. Select model sizes after inspecting laptop RAM/VRAM and free disk space; do not transfer multi-GB weights by Git. Do not automatically start Ollama/Handy unless the destination user authorizes service startup. This portable launcher opens Herdr only.
-
-## Optional tools
-
-FirstMate: use supported upstream installation; retain its task IDs, inboxes and worktree ownership. Consult its current model/effort flags. The NEPTUNE ledger emits commands and records governance; it does not replace FirstMate. Treehouse must preserve unreviewed work. No Mistakes and GNHF remain inactive without approval of a specific run. Install supported Lavish/GitHub/Chrome DevTools AXI integrations if requested, without setup-time publishing, browser automation or credential scraping. AXI is a standard, not an invented executable.
-
-## Honest reporting
-
-Do not silently introduce new paid providers, API billing, credits or overages. Use independent official subscription sign-ins. Never copy auth.json, .claude credentials, browser cookies, SSH keys, sessions, SQLite databases or source trust rules. No models or credentials are present in this repository. Record all destination changes and backups, and disclose unsupported or unverified parts.
-
-## Directory chats and Codex update loops
-
-The shell templates map bare `codex` to `codex resume --last`, scoped to the current working directory. Explicit arguments/subcommands pass through unchanged, as do supervised specialist launches. Do not add `--all` to this default: that could resume another directory's conversation. Use `/new` inside Codex when a fresh conversation is wanted. Verify the installed release's behavior in a directory without previous sessions. Windows and Ubuntu keep separate session stores; never copy authentication or histories through Git.
-
-If Codex repeatedly offers an update after updating, compare the executable actually launched with the installation updated by the package manager. On Ubuntu, inspect `type -a codex`, `ls -l ~/.local/bin/codex`, `npm prefix -g`, `npm list -g @openai/codex --depth=0`, and both executables' `--version` output. The source machine had a stale `~/.local/bin/codex` link into an older package while npm updated a different Node prefix. Back up the old link and point it at the verified current prefix's `bin/codex`. Resolve the destination prefix dynamically; do not hardcode the source machine's Node version. Ensure that prefix's Node runtime is on PATH. Do not delete old packages or change account credentials merely to fix command resolution.
-
-On PowerShell use `Get-Command codex -All` and `npm prefix -g` to diagnose the equivalent mismatch. Restart Codex after updating; an already-running process retains its loaded version. Reload the Ubuntu shell template with `source ~/.config/neptune/environment.bash`, or reopen PowerShell after changing its profile.
-
-## Enforced visible delegation
-
-Install all five runtime files, including `delegation_gate.py`, then merge both the `delegation-prompt` UserPromptSubmit handler and the `delegation-tool` catch-all PreToolUse handler from the destination-origin hook example. Preserve official hooks, unrelated handlers, feature flags and trust decisions. Restart the native CLI and review/trust the changed hooks through its supported interface. Do not edit trusted hashes. Verify native hook loading, direct Orchestrator management access, and rejection of a hidden-agent tool before describing the policy as verified.
-
-Inside actual Herdr, Orchestrator tool execution is limited to planning/clarification and validated `herdr_agents.py` supervision commands. Shell chaining, substitutions, arbitrary scripts and direct file operations are denied. Spawn must carry explicit task-based complexity or model choice. Registered visible workers execute the task. A failed or timed-out Python gate returns an explicit deny through the Node entry; optional naming/report hooks still fail without blocking prompts. A missing Node runtime, disabled/untrusted hooks or a host-level hook failure can still bypass local enforcement; hooks do not replace platform permissions.
-
-NEPTUNE hooks and delegation rules are active only when `NEPTUNE_ACTIVE=1`, `HERDR_ENV=1`, and a real `HERDR_PANE_ID` are inherited from the NEPTUNE launcher. Ordinary Desktop/CLI, Claude, and unrelated Herdr sessions receive no NEPTUNE prompt context, worker hooks, or delegation gate. The launcher sets the marker only for its Herdr process and restores the caller environment. Never fabricate Herdr variables. Relaunch NEPTUNE into fresh panes after changing launcher environment; existing processes retain their old environment. Changed hook commands may require the native hook trust prompt; never edit trust hashes.
-
-Hook protocols: [OpenAI Docs](https://learn.chatgpt.com/docs/hooks), [Claude Code hooks](https://code.claude.com/docs/en/hooks).
-
-The Orchestrator uses the strongest available model under the user's model selection; specialists use the existing task-fit policy. A user request for the strongest Orchestrator can be applied to that destination's verified catalogue (GPT-6 Astra on this host), preserving effort and account/permission settings. Never silently downgrade or change another destination's chosen model. Existing conversations may retain their selection; verify their `/model` when resuming.
-
-Rare stalled-worker recovery uses the documented `interrupt`, `inspect`, `takeover --reason ... --quiescent`, and `finish-takeover` helpers. Takeover is only possible after delegation, recent inspection, an owned idle/done worker and a quiescence attestation. It is one-time per worker, lasts at most ten minutes, is limited to the assigned directory and is revoked by a new user prompt. Orchestrator tool access remains available. Takeover records govern implementation recovery and prevent overlapping helper dispatch; they are not a filesystem sandbox. A native idle state does not prove background writers stopped; the Orchestrator must inspect that separately. No automatic timeout silently grants takeover.
-
-NEPTUNE Codex launchers and visible Codex workers use `--no-daemon` so each interactive process receives its own pane environment instead of using the shared local app-server daemon. `features.multi_agent=false` disables Codex internal subagents only; visible workers are separate Herdr-launched Codex processes. Keep this setting for the visible-worker workflow. Normal Codex launches retain their own defaults. Verify the installed CLI supports `--no-daemon` before installing these launchers.
-
-## Windows Python and bounded self-repair
-
-Use the current hook-provided absolute Python command for worker dispatch. PATH aliases can resolve to broken uv trampolines even when Python itself works. The hook entry prefers NEPTUNE’s installed portable Python when present. A portable Python installation should also contain `python3.exe` beside `python.exe` (the same launcher binary). `herdr_agents.py doctor --repair` checks NEPTUNE’s own runtime and repairs missing aliases/helpers from an exact matching installed bundle. Every worker spawn performs this preflight. Failed launches preserve their pane, worker record and error; inspect before retrying. Self-repair does not change credentials, permissions, models or running sessions.
-
-## Orchestrator access and Windows IPC
-
-Orchestrator tools are available for planning, review, coordination, checks and recovery. Delegate routine implementation to visible workers. PermissionDenied alone does not establish an administrator mismatch: inspect process elevation before suggesting one. Codex sandboxing can prevent Herdr IPC for same-user, non-administrator processes. Use native permission requests unless the destination user explicitly authorizes a different local mode.
-
-This PC’s user authorized full local tools for NEPTUNE on 2026-11-03. Its local Codex wrapper supplies `--sandbox danger-full-access` and passes `NEPTUNE_FULL_ACCESS=1` only to NEPTUNE descendants. The worker helper honors this explicit destination opt-in. Portable launch templates retain normal sandbox defaults; other Codex/Claude sessions retain their settings. Existing Codex processes must exit and relaunch to load a changed sandbox mode. Keep their exact session IDs for resume; do not terminate the Herdr backend or duplicate a live writer.
+Prefer supported native usage/status evidence. local_tools.py can read explicit native Codex JSONL logs without returning chat contents or reading credentials. Missing data stays unknown. Context size, cached input, and subscription allowance are distinct. Do not install a daemon, cookie reader, extra model summarizer, or Hermes merely to claim savings. Read skills/neptune/references/local-tools.md for compact checks and log pagination.

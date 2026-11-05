@@ -1,12 +1,11 @@
-# Visible workers
+# Optional visible workers
 
-Use the existing Herdr skill and environment guard. Install this skill's five scripts together under ~/.local/share/neptune/ on the destination.
+Only run herdr_agents.py inside a genuine inherited Herdr pane. Never fabricate context from a desktop chat. Ordinary work can always proceed directly. Use FirstMate's installed instructions for FirstMate-owned tasks; retain its IDs, inboxes, and worktree ownership.
 
-```bash
-python3 ~/.local/share/neptune/herdr_agents.py name "Orchestrator"
-python3 ~/.local/share/neptune/herdr_agents.py spawn "Frontend Engineer" --harness codex --cwd "$PWD" --complexity bounded --task "Perform only the agreed change and its focused checks."
-```
+Commands: `spawn ROLE --task TASK --cwd EXISTING_WORKTREE --complexity simple|bounded|complex|sensitive`, `inspect NAME [--file RELATIVE_PATH] [--transcript] [--offset N] [--limit N]`, `send NAME --task TASK`, `interrupt NAME`, `doctor [--repair]`.
 
-On Windows use Python and a resolved Windows path. The adapter creates a visible tab, publishes role metadata, starts an interactive CLI, verifies registration, submits the task once without a long wait, reads initial output and records the selection. Delivery is not task execution. Stop hooks notify the actual supervising pane; they do not prove completion. See worker-models.md for selection, approvals and critical acceptance.
+Choose workers only for separable work worth the overhead. Reuse suitable idle workers and keep concurrent writers in separate existing worktrees. Spawn returns identity, model/effort, submitted state, and a details path. It does not wait or fetch a transcript. Keep task role in the tab label; the AI display name is codex or claude. There is no mandatory supervisor role or takeover lease.
 
-Keep native worker chats open for user discussion. Do not promise a combined transcript interface. Use FirstMate's existing inbox for tasks it owns, preserve IDs and worktrees, and reconcile direct-discussion decisions. Never substitute hidden subagents or headless runs. OpenCode is not supported in this setup.
+Inspect task-relevant changes/checks before acceptance. A stopped turn is not verified success. Send specific corrections to the same appropriate idle worker. Interrupt delivery alone does not prove background writers stopped; inspect and preserve partial work before direct recovery. Never blindly retry a failed launch: the helper preserves the worker/pane record.
+
+Worker permission mode inherits NEPTUNE_FULL_ACCESS (1 = authorized full local access; 0 = native restricted/default mode). Native policies remain authoritative. The main AI model/effort is never changed. Read worker-models.md for model choices and scoped approvals.

@@ -1,69 +1,44 @@
-// Shared hook entry: ignore configuration discovered from the other operating system.
-const path = require('node:path');
-const os = require('node:os');
+// Optional display and native session registration; never gates tools.
 const fs = require('node:fs');
-const { spawnSync } = require('node:child_process');
-
-function plan(kind, origin, platform, home) {
-  if (!['name', 'worker-stop', 'codex-session', 'claude-session', 'delegation-prompt', 'delegation-tool'].includes(kind)) throw new Error('Unknown hook kind');
-  if (!['windows', 'ubuntu'].includes(origin)) throw new Error('Unknown hook origin');
-  const windows = platform === 'win32';
-  if ((origin === 'windows') !== windows) return null;
-  const join = (windows ? path.win32 : path.posix).join;
-  const portablePython = join(home, '.local', 'share', 'neptune', 'runtimes', 'python-3.13.18', 'python.exe');
-  const python = windows && fs.existsSync(portablePython) ? portablePython : (windows ? 'python' : 'python3');
-  if (kind.startsWith('delegation-')) return {
-    command: python,
-    args: [join(home, '.local', 'share', 'neptune', 'delegation_gate.py'), kind.slice('delegation-'.length)],
-  };
-  if (kind === 'name' || kind === 'worker-stop') return {
-    command: python,
-    args: [join(home, '.local', 'share', 'neptune', 'herdr_agents.py'), kind === 'name' ? 'hook' : 'report-hook'],
-  };
-  const script = kind === 'codex-session'
-    ? join(home, '.codex', 'herdr-agent-state.' + (windows ? 'ps1' : 'sh'))
-    : join(home, '.claude', 'hooks', 'herdr-agent-state.' + (windows ? 'ps1' : 'sh'));
-  return windows
-    ? { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'session'] }
-    : { command: 'bash', args: [script, 'session'] };
-}
-
-function run(kind, origin, options = {}) {
+const os = require('node:os');
+const path = require('node:path');
+const {spawnSync} = require('node:child_process');
+function run(kind, origin, agent, options = {}) {
   const env = options.env || process.env;
+  const platform = options.platform || process.platform;
   if (env.NEPTUNE_ACTIVE !== '1' || env.HERDR_ENV !== '1' || !env.HERDR_PANE_ID) return 0;
-  const warn = options.warn || ((message) => process.stderr.write(message + '\n'));
-  const write = options.write || ((message) => process.stdout.write(message));
-  const strict = kind === 'delegation-tool';
-  const blocked = (reason) => write(JSON.stringify({hookSpecificOutput: {
-    hookEventName: 'PreToolUse', permissionDecision: 'deny',
-    permissionDecisionReason: 'NEPTUNE delegation gate unavailable; tool blocked: ' + reason,
-  }}) + '\n');
+  if ((origin === 'windows') !== (platform === 'win32')) return 0;
+  const spawn = options.spawn || spawnSync;
   try {
-    const invocation = plan(kind, origin, options.platform || process.platform, options.home || os.homedir());
-    if (!invocation) return 0;
-    // Display/session registration is optional and must never block a user prompt.
-    const input = options.input === undefined
-      ? (kind === 'name' ? Buffer.alloc(0) : fs.readFileSync(0)) : options.input;
-    const result = (options.spawn || spawnSync)(invocation.command, invocation.args, {
-      input, encoding: 'utf8', timeout: 5000, windowsHide: true,
-    });
-    if (result.error || result.status) {
-      const reason = result.error?.message || result.stderr || result.status;
-      if (strict) blocked(reason);
-      else warn('NEPTUNE optional hook: ' + reason);
-    } else if (strict) {
-      const parsed = JSON.parse(result.stdout);
-      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Invalid gate response');
-      if (Object.keys(parsed).length && !(parsed.hookSpecificOutput?.hookEventName === 'PreToolUse' &&
-          parsed.hookSpecificOutput.permissionDecision === 'deny' &&
-          typeof parsed.hookSpecificOutput.permissionDecisionReason === 'string')) throw new Error('Invalid gate decision');
-      write(JSON.stringify(parsed) + '\n');
-    } else if (result.stdout && (!options.spawn || options.write)) write(result.stdout);
+    let command, args, input;
+    if (kind === 'name') {
+      if (!['codex','claude'].includes(agent)) return 0;
+      command = env.HERDR_BIN_PATH || 'herdr';
+      args = ['pane','report-metadata',env.HERDR_PANE_ID,'--source','neptune-role','--display-agent',agent,'--token','role='+agent];
+      input = '';
+    } else if (kind === 'worker-stop') {
+      if (!env.NEPTUNE_SUPERVISOR_PANE) return 0;
+      const windows = platform === 'win32';
+      const join = windows ? path.win32.join : path.posix.join;
+      const home = options.home || os.homedir();
+      const portable = join(home,'.local','share','neptune','runtimes','python-3.13.18','python.exe');
+      command = windows && fs.existsSync(portable) ? portable : (windows ? 'python' : 'python3');
+      args = [join(home,'.local','share','neptune','herdr_agents.py'),'report-hook'];
+      input = options.input === undefined ? fs.readFileSync(0) : options.input;
+    } else if (['codex-session','claude-session'].includes(kind)) {
+      agent = kind.split('-')[0];
+      const windows = platform === 'win32';
+      const join = windows ? path.win32.join : path.posix.join;
+      const script = join(options.home || os.homedir(), agent === 'codex' ? '.codex' : '.claude/hooks', 'herdr-agent-state.'+(windows?'ps1':'sh'));
+      command = windows ? 'powershell.exe' : 'bash';
+      args = windows ? ['-NoProfile','-ExecutionPolicy','Bypass','-File',script,'session'] : [script,'session'];
+      input = options.input === undefined ? fs.readFileSync(0) : options.input;
+    } else return 0; // Retired delegation hook entries are harmless.
+    const result = spawn(command,args,{input,encoding:'utf8',timeout:5000,windowsHide:true,env});
+    if (result.error || result.status) throw new Error(result.error?.message || result.stderr || String(result.status));
   } catch (error) {
-    if (strict) blocked(error.message);
-    else warn('NEPTUNE optional hook: ' + error.message);
+    (options.warn || (message => process.stderr.write(message+'\n')))('NEPTUNE optional hook: '+error.message);
   }
   return 0;
 }
-
-module.exports = { plan, run };
+module.exports = {run};

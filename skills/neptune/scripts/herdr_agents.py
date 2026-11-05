@@ -11,6 +11,7 @@ import sys
 import time
 import uuid
 import worker_models
+from local_tools import save_details, excerpt
 
 
 def require_herdr():
@@ -36,7 +37,8 @@ def call(args):
     if not binary: raise ValueError('Installed Herdr executable not found')
     result=subprocess.run([binary,*args],capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=45)
     if result.returncode:
-        raise ValueError('Herdr command failed: '+(result.stderr or result.stdout).strip()[:1600])
+        path=save_details({'argv':args,'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
+        raise ValueError('Herdr command failed: '+(result.stderr or result.stdout).strip()[-1000:]+'; details_path='+path)
     # Herdr 0.9.5 report-metadata uses send_ok_request: success is deliberately silent.
     if args[:2]==['pane','report-metadata'] and not result.stdout.strip():
         return {}
@@ -46,11 +48,16 @@ def call(args):
     try:
         response=json.loads(result.stdout)
     except ValueError as error:
+        path=save_details({'argv':args,'stdout':result.stdout,'stderr':result.stderr})
         raise ValueError('Herdr returned an unexpected non-JSON response for '+
-                         ' '.join(args[:2])+': '+repr(result.stdout[:300])) from error
+                         ' '.join(args[:2])+': '+repr(result.stdout[:300])+'; details_path='+path) from error
     if not isinstance(response,dict): raise ValueError('Herdr returned a non-object JSON response')
-    if response.get('error'): raise ValueError(str(response['error']))
-    return response.get('result',response)
+    if response.get('error'):
+        path=save_details(response)
+        raise ValueError(str(response['error'])[:1000]+'; details_path='+path)
+    value=response.get('result',response)
+    if not isinstance(value,dict): raise ValueError('Herdr result must be an object')
+    return value
 
 
 def label(pane,role):
@@ -66,50 +73,35 @@ def name(role):
     return {'pane':pane,'display_name':role}
 
 
-def hook():
-    if os.environ.get('HERDR_ENV')!='1': return
+def hook(harness=None):
+    if os.environ.get('HERDR_ENV') != '1': return
+    harness = harness or os.environ.get('NEPTUNE_AGENT_HARNESS')
+    if harness not in ('codex', 'claude'): return
     try:
-        pane=require_herdr()
-        role='Orchestrator'
-        if os.environ.get('NEPTUNE_SUPERVISOR_PANE'):
-            role=os.environ.get('NEPTUNE_AGENT_ROLE')
-        if not role:
-            current=call(['pane','get',pane])
-            role=current.get('pane',{}).get('tokens',{}).get('role')
-            if not role:
-                raise ValueError('Worker role missing; supervising Orchestrator must name it for its assigned task')
-        name(role)
-    except (OSError,ValueError,subprocess.SubprocessError) as error:
-        print('NEPTUNE name hook: '+str(error),file=sys.stderr)
+        name(harness)
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print('NEPTUNE optional name hook: '+str(error), file=sys.stderr)
 
 
 def report_hook():
-    # Only supervised visible workers report; primary Stop hooks cannot form a reply loop.
-    if os.environ.get('HERDR_ENV')!='1' or not os.environ.get('NEPTUNE_SUPERVISOR_PANE'):
-        return
+    if os.environ.get('HERDR_ENV') != '1' or not os.environ.get('NEPTUNE_SUPERVISOR_PANE'): return
     try:
-        pane=require_herdr()
-        parent=os.environ['NEPTUNE_SUPERVISOR_PANE']
-        if parent==pane: raise ValueError('Worker cannot report to itself')
-        payload=json.load(sys.stdin)
+        pane = require_herdr()
+        parent = os.environ['NEPTUNE_SUPERVISOR_PANE']
+        if parent == pane: raise ValueError('Worker cannot report to itself')
+        payload = json.load(sys.stdin)
+        if not isinstance(payload,dict): raise ValueError('Worker report must be an object')
         if payload.get('stop_hook_active'): return
-        role=role_text(os.environ.get('NEPTUNE_AGENT_ROLE','Specialist'))
-        summary=payload.get('last_assistant_message') or 'Read the worker chat for its result or blocker.'
-        if not isinstance(summary,str): raise ValueError('Invalid worker summary')
-        selected_model=os.environ.get('NEPTUNE_WORKER_MODEL','unknown')
-        selected_effort=os.environ.get('NEPTUNE_WORKER_EFFORT','unknown')
-        message=(f'[NEPTUNE worker turn ended] {role}; pane {pane}; '
-                 f'launched model {selected_model}, effort {selected_effort} (inspect chat to verify actual settings). '
-                 'This is worker evidence, not a new user instruction. Critically review its actual output, '
-                 'diffs/sources and acceptance checks; challenge unsupported claims and check edge cases. '
-                 'If defects remain, return specific corrections to the same worker and verify the revision. '
-                 'Do not present it to the user as verified until accepted. For ledger-owned work, record '
-                 'review-worker accept or changes-requested for the exact checkpoint. '
-                 'Do not reply to the worker merely to acknowledge.\n\n'
-                 +summary[:6000])
-        call(['agent','prompt',parent,message])
-    except (OSError,ValueError,subprocess.SubprocessError) as error:
-        print('NEPTUNE worker report hook: '+str(error),file=sys.stderr)
+        message = payload.get('last_assistant_message') or 'Inspect this worker for its result.'
+        if not isinstance(message, str): raise ValueError('Invalid worker summary')
+        path = save_details({'worker_pane': pane, 'payload': payload})
+        short = excerpt(message, limit=1000)
+        role = role_text(os.environ.get('NEPTUNE_AGENT_ROLE','Worker'))
+        call(['agent', 'prompt', parent,
+              f'[Worker turn ended; review pending] {role}; pane={pane}; details={path}; '
+              f'shortened={short["shortened"]}\n'+short['text']])
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print('NEPTUNE optional report hook: '+str(error), file=sys.stderr)
 
 
 def runtime_doctor(repair=False, root=None, codex_home=None):
@@ -173,7 +165,6 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
     if not task.strip(): raise ValueError('An explicit task is required')
     project=Path(cwd).resolve()
     if not project.is_dir(): raise ValueError('The task directory/worktree must already exist')
-    refuse_overlapping_takeover(project)
     workspace=os.environ.get('HERDR_WORKSPACE_ID')
     if not workspace: raise ValueError('Herdr workspace context is missing')
     if harness=='codex':
@@ -181,26 +172,27 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
                                        worker_models.task_scope(role,task,project),approval)
         if selection['approval_required']:
             raise ValueError('Human approval required before starting this worker: '+json.dumps(selection))
-        native_args=['--no-daemon','-c','features.multi_agent=false','--model',selection['model'],'-c','model_reasoning_effort='+json.dumps(selection['effort']),
+        native_args=['--no-daemon','--model',selection['model'],'-c','model_reasoning_effort='+json.dumps(selection['effort']),
                      '-c','service_tier="default"']
         if os.environ.get('NEPTUNE_FULL_ACCESS') == '1':
-            native_args += ['--sandbox', 'danger-full-access']
+            native_args += ['--sandbox', 'danger-full-access', '--ask-for-approval', 'never']
     else:
         if not model or not effort or not reason:
             raise ValueError('Claude requires an explicit CLI-supported model, effort and task-based reason; no automatic provider fallback')
         selection={'harness':'claude','model':model,'effort':effort,'why':reason,
                    'approval_required':False,'availability':'Explicit Claude settings; CLI support must be verified'}
         native_args=['--model',model,'--effort',effort]
-    name('Orchestrator')
+        if os.environ.get('NEPTUNE_FULL_ACCESS') == '1':
+            native_args += ['--permission-mode', 'bypassPermissions']
     created=call(['tab','create','--workspace',workspace,'--cwd',str(project),'--label',role,
-                  '--env','NEPTUNE_ACTIVE=1',
+                  '--env','NEPTUNE_ACTIVE=1', '--env','NEPTUNE_AGENT_HARNESS='+harness,
                   *(['--env','NEPTUNE_FULL_ACCESS=1'] if os.environ.get('NEPTUNE_FULL_ACCESS')=='1' else []),
                   '--env','NEPTUNE_AGENT_ROLE='+role,'--env','NEPTUNE_SUPERVISOR_PANE='+parent,
                   '--env','NEPTUNE_WORKER_MODEL='+selection['model'],
                   '--env','NEPTUNE_WORKER_EFFORT='+selection['effort'],'--no-focus'])
     pane=created['root_pane']['pane_id']
     identifier=cli_name(role)
-    label(pane,role)
+    label(pane,harness)
     launch=['agent','start',identifier,'--kind',harness,'--pane',pane,'--timeout','30000']
     launch+=['--',*native_args]
     record={'name':identifier,'role':role,'scope':worker_models.task_scope(role,task,project),
@@ -221,35 +213,27 @@ def spawn(role,harness,task,cwd,model=None,effort=None,complexity='bounded',atte
                          'Inspect this worker before retrying; no replacement was launched.') from error
     record['launch_state']='interactive CLI detected; actual model/effort still require UI verification'
     record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
-    label(pane,role)
+    label(pane,harness)
     registered=call(['agent','list'])
     entries=registered.get('agents',[])
     if not any(entry.get('pane_id')==pane for entry in entries):
         raise ValueError('Worker terminal opened but agent registration was not confirmed; inspect the pane before retrying')
     record['launch_state']='registered; task pending'
     record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
-    brief=(f'You are the {role} specialist, not the orchestrator. Your supervising orchestrator is in '
-           f'Herdr pane {parent}. Work only on this assigned task in {project}. Keep this interactive '
-           'conversation available for the user. Report progress, checks and results to the orchestrator '
-           'through the existing FirstMate channel when this task is FirstMate-owned; otherwise the '
-           'orchestrator can read this named Herdr agent. Do not create extra workers without a concrete need. '
-           'If a more accurate professional role fits the first task, publish it using the NEPTUNE naming helper.\n\n'
-           f'Worker launch settings: {selection["model"]}, effort {selection["effort"]}. '
-           f'Reason: {selection["why"]}. Do not change the Orchestrator settings. '
-           'Do not switch to gpt-6.1-sol or gpt-6-astra without task-specific human approval. '
-           'Keep tool output bounded, read only relevant files, avoid duplicate reviews and unnecessary retries.\n\n'
+    brief=(f'Role: {role}. Work only on the assigned task in {project}. '
+           f'Parent pane: {parent}. Delegation is optional; do not duplicate this task. '
+           'Keep results concise: changed files, checks, failures, next action. '
+           'Use FirstMate when this task is FirstMate-owned. Preserve work and session history.\n\n'
            f'Assigned task:\n{task}')
     # Submit once, then return control; completion is verified in a later status check.
     delivered=call(['agent','prompt',identifier,brief])
     record['launch_state']='task submitted; not verified working or complete'
     record_file.write_text(json.dumps(record,indent=2),encoding='utf-8')
-    observed=call(['agent','get',identifier])
-    transcript=call(['agent','read',identifier,'--source','recent-unwrapped','--lines','60'])
-    return {'name':identifier,'display_name':role,'pane':pane,'tab':created['tab']['tab_id'],
-            'selection':selection,'record_file':str(record_file),
-            'harness':harness,'launch':started,'sidebar_registration':registered,
-            'prompt_result':delivered,'observed_agent':observed,'worker_transcript':transcript,
-            'task_completion':'Submitted, not verified complete. Check observed activity and the worker transcript later; do not equate delivery with execution.'}
+    path=save_details({'record':record, 'launch':started, 'registration':registered,
+                       'prompt_result':delivered})
+    return {'name':identifier,'pane':pane,'harness':harness,
+            'model':selection['model'],'effort':selection['effort'],
+            'state':'submitted; not verified complete','details_path':path}
 
 
 def owned_worker(identifier):
@@ -262,31 +246,31 @@ def owned_worker(identifier):
     return record
 
 
-def inspect_worker(identifier,file=None):
+def inspect_worker(identifier, file=None, transcript=False, offset=0, limit=2000):
     record=owned_worker(identifier)
     observed=call(['agent','get',identifier])
-    text=call(['agent','read',identifier,'--source','recent-unwrapped','--lines','120'])
-    result={'worker':record,'observed_agent':observed,'transcript':text}
+    state=observed.get('agent',observed).get('state','unknown')
+    result={'worker':identifier,'state':state,'completion':'Review and checks required before acceptance'}
+    full={'worker':record,'observed_agent':observed}
+    if transcript:
+        text=call(['agent','read',identifier,'--source','recent-unwrapped','--lines','120'])
+        full['transcript']=text
+        result['transcript']=excerpt(text.get('text',''),offset,limit)
+        result['transcript']['scope']='Recent 120 lines; native session retains older history'
     if file:
         root=Path(record['scope']['cwd']).resolve()
         target=(root/file).resolve()
         if not target.is_relative_to(root) or not target.is_file():
             raise ValueError('Review files must be inside the assigned worker directory')
-        with target.open('r',encoding='utf-8',errors='replace') as stream:
-            result['file']={'path':str(target),'text':stream.read(24000)}
-    else:
-        # Evidence is read by fixed argv, never a caller-supplied shell command.
-        diff=subprocess.run(['git','--no-pager','-C',record['scope']['cwd'],'diff','--no-ext-diff','--no-textconv','--stat'],
-                            capture_output=True,text=True,timeout=10)
-        result['diff_stat']=diff.stdout[:12000] if diff.returncode==0 else 'Not a Git working tree'
-    record['last_inspected_at']=time.time()
-    (Path.home()/'.local/state/neptune/workers'/(identifier+'.json')).write_text(json.dumps(record,indent=2),encoding='utf-8')
+        text=target.read_text(encoding='utf-8',errors='replace')
+        full['file']={'path':str(target),'text':text}
+        result['file']={'path':str(target),**excerpt(text,offset,limit)}
+    result['details_path']=save_details(full)
     return result
 
 
 def send_worker(identifier,task):
     record=owned_worker(identifier)
-    refuse_overlapping_takeover(Path(record['scope']['cwd']))
     if not task.strip(): raise ValueError('An explicit task is required')
     observed=call(['agent','get',identifier])
     agent=observed.get('agent',observed)
@@ -296,70 +280,17 @@ def send_worker(identifier,task):
             'task_completion':'Submitted, not verified complete'}
 
 
-def takeover_path(home,pane):
-    key=hashlib.sha256(pane.encode()).hexdigest()
-    return home/'.local/state/neptune/takeovers'/(key+'.json')
-
-
-def refuse_overlapping_takeover(project):
-    path=takeover_path(Path.home(),require_herdr())
-    if path.exists():
-        lease=json.loads(path.read_text(encoding='utf-8'))
-        root=Path(lease['cwd']).resolve()
-        project=project.resolve()
-        if (not lease.get('closed') and lease.get('expires_at',0)>time.time() and
-                (project.is_relative_to(root) or root.is_relative_to(project))):
-            raise ValueError('Finish the direct takeover before dispatching overlapping worker writes')
-
-
 def interrupt_worker(identifier):
     owned_worker(identifier)
     return {'worker':identifier,'interrupt':call(['agent','send-keys',identifier,'ctrl+c']),
-            'next':'Inspect again. Interrupt delivery alone does not prove the worker or background writers stopped.'}
-
-
-def takeover_worker(identifier,reason,quiescent=False):
-    record=owned_worker(identifier)
-    if not quiescent or len(reason.strip())<20:
-        raise ValueError('Takeover needs a specific stall reason and --quiescent after verifying no background writer remains')
-    if record.get('takeover'):
-        raise ValueError('This worker already had its one exceptional takeover; do not turn fallback into the normal workflow')
-    now=time.time()
-    inspected=record.get('last_inspected_at',0)
-    if not 0<=now-inspected<=300:
-        raise ValueError('Inspect the stalled worker immediately before considering takeover')
-    observed=call(['agent','get',identifier])
-    if observed.get('agent',observed).get('state') not in ('idle','done'):
-        raise ValueError('Worker is still active, blocked or unknown. Interrupt and verify quiescence before takeover')
-    parent=require_herdr()
-    lease={'worker':identifier,'supervisor_pane':parent,'cwd':record['scope']['cwd'],
-           'reason':reason.strip(),'issued_at':now,'expires_at':now+600,'closed':False}
-    target=takeover_path(Path.home(),parent)
-    if target.exists():
-        current=json.loads(target.read_text(encoding='utf-8'))
-        if not current.get('closed') and current.get('expires_at',0)>now:
-            raise ValueError('Finish the existing takeover before requesting another')
-    target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text(json.dumps(lease,indent=2),encoding='utf-8')
-    record['takeover']=lease
-    (Path.home()/'.local/state/neptune/workers'/(identifier+'.json')).write_text(json.dumps(record,indent=2),encoding='utf-8')
-    return {'takeover':lease,'next':'Complete only this stalled task, verify it, then run finish-takeover. New user prompts revoke this lease.'}
-
-
-def finish_takeover():
-    path=takeover_path(Path.home(),require_herdr())
-    if path.exists():
-        lease=json.loads(path.read_text(encoding='utf-8'))
-        lease['closed']=True
-        path.write_text(json.dumps(lease,indent=2),encoding='utf-8')
-    return {'takeover':'closed'}
+            'next':'Inspect again; delivery does not prove background writers stopped.'}
 
 
 def make_parser():
     parser=argparse.ArgumentParser(description=__doc__)
     commands=parser.add_subparsers(dest='command',required=True)
     sub=commands.add_parser('name');sub.add_argument('role')
-    commands.add_parser('hook')
+    sub=commands.add_parser('hook');sub.add_argument('--harness',choices=['codex','claude'])
     commands.add_parser('report-hook')
     sub=commands.add_parser('doctor');sub.add_argument('--repair',action='store_true')
     sub=commands.add_parser('spawn');sub.add_argument('role')
@@ -372,11 +303,10 @@ def make_parser():
     sub.add_argument('--reason')
     sub.add_argument('--approval-file',help='Task-specific human approval record; never fabricate a user reference')
     sub=commands.add_parser('inspect');sub.add_argument('worker');sub.add_argument('--file')
+    sub.add_argument('--transcript',action='store_true')
+    sub.add_argument('--offset',type=int,default=0);sub.add_argument('--limit',type=int,default=2000)
     sub=commands.add_parser('send');sub.add_argument('worker');sub.add_argument('--task',required=True)
     sub=commands.add_parser('interrupt');sub.add_argument('worker')
-    sub=commands.add_parser('takeover');sub.add_argument('worker');sub.add_argument('--reason',required=True)
-    sub.add_argument('--quiescent',action='store_true')
-    commands.add_parser('finish-takeover')
     return parser
 
 
@@ -386,22 +316,20 @@ def main():
     try:
         if args.command=='doctor':
             result=runtime_doctor(args.repair)
-            print(json.dumps(result,indent=2))
+            print(json.dumps(result,separators=(',',':')))
             if not result['healthy']: parser.exit(2,'NEPTUNE runtime checks failed\n')
             return
-        if args.command=='hook': hook();return
+        if args.command=='hook': hook(args.harness);return
         if args.command=='report-hook': report_hook();print('{}');return
         if args.command=='name': result=name(args.role)
-        elif args.command=='inspect': result=inspect_worker(args.worker,args.file)
+        elif args.command=='inspect': result=inspect_worker(args.worker,args.file,args.transcript,args.offset,args.limit)
         elif args.command=='send': result=send_worker(args.worker,args.task)
         elif args.command=='interrupt': result=interrupt_worker(args.worker)
-        elif args.command=='takeover': result=takeover_worker(args.worker,args.reason,args.quiescent)
-        elif args.command=='finish-takeover': result=finish_takeover()
         else:
             approval=json.loads(Path(args.approval_file).read_text(encoding='utf-8-sig')) if args.approval_file else None
             result=spawn(args.role,args.harness,args.task,args.cwd,args.model,args.effort,
                          args.complexity,args.failed_attempts,args.reason,approval)
-        print(json.dumps(result,indent=2))
+        print(json.dumps(result,separators=(',',':')))
     except (OSError,ValueError,KeyError,subprocess.SubprocessError) as error:
         parser.exit(2,'NEPTUNE: '+str(error)+'\n')
 

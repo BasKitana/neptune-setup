@@ -97,7 +97,7 @@ class VisibleAgentTests(unittest.TestCase):
             return {}
         with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',side_effect=fake):
             result=agents.spawn('Frontend Engineer','codex','Inspect only; wait for instructions',str(Path.cwd()))
-        self.assertIn('Orchestrator',seen[0])
+        self.assertFalse(any('Orchestrator' in a for a in seen))
         tab=next(a for a in seen if a[:2]==['tab','create'])
         self.assertIn('--env',tab);self.assertIn('NEPTUNE_AGENT_ROLE=Frontend Engineer',tab)
         start=next(args for args in seen if args[:2]==['agent','start'])
@@ -107,19 +107,17 @@ class VisibleAgentTests(unittest.TestCase):
         self.assertIn('owner:p7',prompt[3])
         self.assertNotIn('--wait',prompt)
         self.assertFalse(any(a[:2]==['agent','wait'] for a in seen))
-        self.assertIn('not verified complete',result['task_completion'])
-        self.assertTrue(any(a[:2]==['agent','read'] for a in seen))
+        self.assertIn('not verified complete',result['state'])
+        self.assertFalse(any(a[:2]==['agent','read'] for a in seen))
         self.assertNotIn('exec',start)
         self.assertIn('gpt-6-luna',start)
         self.assertIn('model_reasoning_effort="medium"',start)
         self.assertIn('service_tier="default"',start)
         self.assertIn('--no-daemon',start)
         self.assertNotIn('--sandbox',start)
-        self.assertIn('features.multi_agent=false',start)
-        created=next(args for args in seen if args[:2]==['tab','create'])
-        self.assertIn('NEPTUNE_ACTIVE=1',created)
-        self.assertEqual(result['selection']['model'],'gpt-6-luna')
-        self.assertTrue(Path(result['record_file']).is_file())
+        self.assertIn('NEPTUNE_ACTIVE=1',next(a for a in seen if a[:2]==['tab','create']))
+        self.assertEqual(result['model'],'gpt-6-luna')
+        self.assertTrue(Path(result['details_path']).is_file())
 
     def test_full_local_tools_require_destination_opt_in(self):
         env={'HERDR_ENV':'1','HERDR_PANE_ID':'fixture-parent','HERDR_WORKSPACE_ID':'fixture-workspace','NEPTUNE_FULL_ACCESS':'1'}
@@ -179,7 +177,7 @@ class VisibleAgentTests(unittest.TestCase):
                                 'gpt-6.1-sol','high',reason='Risk evidence',approval=approval)
         start=next(a for a in seen if a[:2]==['agent','start'])
         self.assertIn('model_reasoning_effort="high"',start)
-        self.assertFalse(result['selection']['approval_required'])
+        self.assertEqual(result['model'],'gpt-6.1-sol')
         self.assertEqual(config.read_bytes(),before)
 
     def test_unregistered_terminal_is_not_reported_as_a_worker(self):
@@ -208,22 +206,16 @@ class VisibleAgentTests(unittest.TestCase):
         self.assertRegex(first,r'^[a-z][a-z0-9_-]{0,31}$')
         self.assertLessEqual(len(agents.cli_name('A very long professional software engineering specialist')),32)
 
-    def test_resume_keeps_existing_role_and_worker_env_wins(self):
-        env={'HERDR_ENV':'1','HERDR_PANE_ID':'p1','NEPTUNE_SUPERVISOR_PANE':'parent'}
-        with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',return_value={'pane':{'tokens':{'role':'Backend Engineer'}}}) as call:
-            agents.hook()
-            self.assertIn('Backend Engineer',call.call_args.args[0])
-        env['NEPTUNE_AGENT_ROLE']='QA Engineer'
-        with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',return_value={}) as call:
-            agents.hook()
-            self.assertIn('QA Engineer',call.call_args.args[0])
-
-    def test_primary_always_uses_orchestrator_even_with_stale_role(self):
+    def test_hook_uses_detected_cli_and_never_orchestrator(self):
         env={'HERDR_ENV':'1','HERDR_PANE_ID':'p1','NEPTUNE_AGENT_ROLE':'Old Role'}
-        with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',return_value={}) as call:
+        for harness in ('codex','claude'):
+            with patch.dict(os.environ,env,clear=True),patch.object(agents,'call',return_value={}) as call:
+                agents.hook(harness)
+                self.assertIn(harness,call.call_args.args[0])
+                self.assertNotIn('Orchestrator',call.call_args.args[0])
+        with patch.dict(os.environ,env,clear=True),patch.object(agents,'call') as call:
             agents.hook()
-            self.assertIn('Orchestrator',call.call_args.args[0])
-            self.assertNotIn('Old Role',call.call_args.args[0])
+            call.assert_not_called()
 
 
 class RuntimeRepairTests(unittest.TestCase):

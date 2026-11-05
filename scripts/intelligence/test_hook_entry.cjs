@@ -1,52 +1,35 @@
 const assert = require('node:assert/strict');
-const { plan, run: rawRun } = require('../../skills/neptune/scripts/hook-entry.cjs');
-
-const activeEnv = {NEPTUNE_ACTIVE:'1', HERDR_ENV:'1', HERDR_PANE_ID:'fixture-pane'};
-const run = (kind, origin, options = {}) => rawRun(kind, origin, {env:activeEnv, ...options});
-for (const env of [{}, {HERDR_ENV:'1', HERDR_PANE_ID:'other'}, {NEPTUNE_ACTIVE:'1'}]) {
-  for (const kind of ['name','worker-stop','codex-session','claude-session','delegation-prompt','delegation-tool']) {
-    assert.equal(rawRun(kind, 'windows', {env, spawn:()=>{throw new Error('must not launch');}, write:()=>{throw new Error('must not inject');}}), 0);
-  }
+const {run} = require('../../skills/neptune/scripts/hook-entry.cjs');
+const env={NEPTUNE_ACTIVE:'1',HERDR_ENV:'1',HERDR_PANE_ID:'fixture-pane'};
+for(const platform of ['win32','linux']) {
+ const origin=platform==='win32'?'windows':'ubuntu';
+ for(const agent of ['codex','claude']) {
+  let calls=[];
+  run('name',origin,agent,{env,platform,spawn:(cmd,args)=>{calls.push({cmd,args});return {status:0};}});
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].args[calls[0].args.indexOf('--display-agent')+1],agent);
+  calls=[];
+  run(agent+'-session',origin,undefined,{env,platform,home:platform==='win32'?'C:\\Users\\fixture':'/home/fixture',input:'{}',spawn:(cmd,args)=>{calls.push({cmd,args});return {status:0};}});
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].cmd,platform==='win32'?'powershell.exe':'bash');
+  assert(calls[0].args.some(s=>s.includes('herdr-agent-state.')));
+ }
 }
-assert.equal(plan('name', 'windows', 'linux', '/home/fixture'), null);
-assert.equal(plan('codex-session', 'windows', 'linux', '/home/fixture'), null);
-assert.equal(plan('name', 'ubuntu', 'win32', 'C:\\Users\\fixture'), null);
-let p = plan('name', 'ubuntu', 'linux', '/home/fixture');
-assert.equal(p.command, 'python3');
-assert.deepEqual(p.args, ['/home/fixture/.local/share/neptune/herdr_agents.py', 'hook']);
-p = plan('codex-session', 'ubuntu', 'linux', '/home/fixture');
-assert.equal(p.command, 'bash');
-assert.deepEqual(p.args, ['/home/fixture/.codex/herdr-agent-state.sh', 'session']);
-p = plan('claude-session', 'windows', 'win32', 'C:\\Users\\fixture');
-assert.equal(p.command, 'powershell.exe');
-assert(p.args.includes('C:\\Users\\fixture\\.claude\\hooks\\herdr-agent-state.ps1'));
-assert.throws(() => plan('arbitrary-command', 'ubuntu', 'linux', '/home/fixture'));
-let calls = 0;
-assert.equal(run('name', 'windows', {platform:'linux', home:'/home/fixture', spawn:()=>{calls++;}}), 0);
-assert.equal(calls, 0);
-let warning = '';
-assert.equal(run('name', 'ubuntu', {
-  platform:'linux', home:'/home/fixture', input:Buffer.alloc(0),
-  spawn:(command,args)=>{ assert.equal(command,'python3'); assert(args[0].startsWith('/home/fixture/')); return {status:2,stderr:'synthetic display failure'}; },
-  warn:(message)=>{warning=message;},
-}),0);
-assert(warning.includes('synthetic display failure'));
-console.log('Cross-platform hook regression checks passed (paths, foreign config skip, non-blocking failure).');
-let output = '';
-const denial = (result) => {
-  output = '';
-  assert.equal(run('delegation-tool', 'ubuntu', {platform:'linux', home:'/home/fixture',
-    input:Buffer.from('{}'), spawn:()=>result, write:(s)=>{output+=s;}}),0);
-  assert.equal(JSON.parse(output).hookSpecificOutput.permissionDecision, 'deny');
-};
-denial({status:2,stderr:'gate unavailable'});
-denial({error:new Error('timeout')});
-denial({status:0,stdout:'not JSON'});
-denial({status:0,stdout:'[]'});
-denial({status:0,stdout:'{"decision":"allow"}'});
-output = '';
-run('delegation-tool','ubuntu',{platform:'linux',home:'/home/fixture',input:Buffer.from('{}'),
-  spawn:()=>({status:0,stdout:'{}'}),write:(s)=>{output+=s;}});
-assert.deepEqual(JSON.parse(output),{});
-assert.equal(plan('delegation-tool','ubuntu','linux','/home/fixture').args[1],'tool');
-console.log('Delegation hook failures and malformed decisions deny execution.');
+let calls=0;
+for(const kind of ['delegation-tool','delegation-prompt']) run(kind,'windows',undefined,{env,platform:'win32',spawn:()=>{calls++;}});
+run('name','windows','codex',{env:{},platform:'win32',spawn:()=>{calls++;}});
+run('name','ubuntu','codex',{env,platform:'win32',spawn:()=>{calls++;}});
+run('name','windows',undefined,{env,platform:'win32',spawn:()=>{calls++;}});
+run('worker-stop','windows',undefined,{env,platform:'win32',spawn:()=>{calls++;}});
+assert.equal(calls,0);
+for(const result of [{status:1,stderr:'fixture failure'},{error:new Error('fixture timeout')}]) {
+ let warning='';
+ assert.equal(run('name','windows','codex',{env,platform:'win32',spawn:()=>result,warn:s=>warning=s}),0);
+ assert(warning.includes('fixture'));
+}
+let report;
+run('worker-stop','ubuntu',undefined,{env:{...env,NEPTUNE_SUPERVISOR_PANE:'fixture-parent'},platform:'linux',home:'/home/fixture',input:'{"last_assistant_message":"done"}',spawn:(cmd,args,options)=>{report={cmd,args,options};return {status:0};}});
+assert.equal(report.cmd,'python3');
+assert.deepEqual(report.args,['/home/fixture/.local/share/neptune/herdr_agents.py','report-hook']);
+assert.equal(report.options.input,'{"last_assistant_message":"done"}');
+console.log('PASS: both CLI names/platform paths, native session hooks, inactive/foreign no-ops, retired gates, nonblocking failures, worker reports.');

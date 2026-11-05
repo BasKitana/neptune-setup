@@ -1,6 +1,6 @@
 # Worker model policy
 
-This policy applies to specialists only. The user chooses the Orchestrator model and effort; never change its configuration or active selection.
+This policy applies to specialists only. The user chooses the main AI model and effort; never change its configuration or active selection.
 
 ## Selection
 
@@ -17,7 +17,7 @@ Only models listed by that host's Codex catalogue are selectable. Supported effo
 
 Known economical fallback for missing GPT-6 Luna is GPT-5.6 Luna. Stronger non-restricted choices prefer GPT-6 Sol, then GPT-5.6 Terra, then GPT-5.6 Sol. Do not interpret version numbers as prices. These preference tiers are a documented policy snapshot, not guaranteed token savings or API price estimates.
 
-The Orchestrator may explicitly choose any other visible catalogue model and any supported effort when justified by task evidence. Supply `--reason`. Automatic defaults avoid max/ultra; explicit use needs a concrete reason. Later user requests for a specific worker model are honored within the approval rules.
+The main AI may explicitly choose any other visible catalogue model and any supported effort when justified by task evidence. Supply `--reason`. Automatic defaults avoid max/ultra; explicit use needs a concrete reason. Later user requests for a specific worker model are honored within the approval rules.
 
 **GPT-6.1 Sol and GPT-6 Astra always require task-specific human approval**, at every effort level, including versioned IDs in those model families. High effort on other models does not itself require approval: this is the user's revised rule, replacing the earlier low/medium-only proposal.
 
@@ -36,7 +36,7 @@ python3 ~/.local/share/neptune/herdr_agents.py spawn "Frontend Engineer" \
 
 The default complexity is `bounded`; choose `simple`, `complex`, or `sensitive` from actual task evidence. `--failed-attempts 0|1|2` carries observed failures, not speculative estimates. `--model`, `--effort`, and `--reason` allow a justified explicit choice. The helper validates before creating a tab, then launches Codex with explicit model, `model_reasoning_effort`, and Standard service tier. It never changes the parent's configuration.
 
-Records live at `~/.local/state/neptune/workers/<actual-worker-name>.json`. Output includes selection, scope, launch status and real pane/tab IDs. The record describes launch settings, not proof that the running model never changed. Completion reports carry launched model/effort and instruct the Orchestrator to verify the chat.
+Records live at `~/.local/state/neptune/workers/<actual-worker-name>.json`. Compact output includes model/effort, submitted state, worker/pane IDs, and a details path. Scope and launch diagnostics stay in local records. The record describes launch settings, not proof that the running model never changed. Completion reports identify the worker and link to full local output; verify actual changes and checks before acceptance.
 
 Initial dispatch remains non-blocking. Say submitted until activity is observed, and verified complete only after checking results and acceptance criteria. Keep context narrow, tool outputs bounded and evidence targeted; do not shorten away necessary validation.
 
@@ -52,9 +52,9 @@ The scope digest includes role, full assigned task, directory, model and effort.
 
 `firstmate-command ... relaunch` pins model and effort through FirstMate's existing `--model`/`--effort` flags. It emits a command rather than executing it. Inspect actual old-worker state and preserve work before any replacement. Direct FirstMate commands must follow the same documented worker policy.
 
-## Orchestrator acceptance gate
+## main AI acceptance gate
 
-Every finished worker turn needs a critical Orchestrator review before presenting its output as verified. Check the actual diff or findings, acceptance criteria, correctness, relevant edge cases, security, tests and unsupported claims. For research, challenge source quality and conclusions; for file/count tasks, verify scope and counting rules. Review does not mean automatically launching another full duplicate review.
+Every finished worker turn needs a critical main AI review before presenting its output as verified. Check the actual diff or findings, acceptance criteria, correctness, relevant edge cases, security, tests and unsupported claims. For research, challenge source quality and conclusions; for file/count tasks, verify scope and counting rules. Review does not mean automatically launching another full duplicate review.
 
 Return specific defects and acceptance checks to the same visible worker, then inspect the corrected result. Keep the user's conversation responsive; share progress or an honest blocker when needed. Do not hide failures until everything appears perfect. Use another specialist only when independent expertise or review scope justifies it, selected under the same worker model policy.
 
@@ -69,4 +69,4 @@ Use `changes-requested` instead of `accept` when issues remain. The note must re
 
 ## Verification limits
 
-Tests cover capability selection, all supported effort choices, restricted approvals, invalid/missing/hidden catalogue entries, retries, explicit launch arguments, records, and preservation of Orchestrator config. Live launch/UI and completion delivery require a real Herdr session. The desktop setup chat must not fake Herdr environment variables to perform that check.
+Tests cover capability selection, all supported effort choices, restricted approvals, invalid/missing/hidden catalogue entries, retries, explicit launch arguments, records, and preservation of main AI config. Live launch/UI and completion delivery require a real Herdr session. The desktop setup chat must not fake Herdr environment variables to perform that check.
