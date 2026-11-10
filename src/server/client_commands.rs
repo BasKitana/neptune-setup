@@ -300,6 +300,11 @@ mod tests {
         );
 
         assert_eq!(
+            actual.remove("tab.snap").as_deref(),
+            Some("7ceed559e809741acd2fad6134694ac3548b69b5e08ee1b2b4eb50b6ab533796")
+        );
+
+        assert_eq!(
             actual, expected,
             "an existing endpoint method changed shape; add load-bearing behavior as a new advertised method or explicitly gate new fields"
         );

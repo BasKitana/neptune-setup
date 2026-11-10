@@ -4346,6 +4346,25 @@
           ],
           "type": "object"
         },
+        "TabSnapParams": {
+          "properties": {
+            "edge": {
+              "$ref": "#/schemas/request/$defs/PaneDirection"
+            },
+            "source_tab_id": {
+              "type": "string"
+            },
+            "target_pane_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_tab_id",
+            "target_pane_id",
+            "edge"
+          ],
+          "type": "object"
+        },
         "TabTarget": {
           "properties": {
             "tab_id": {
@@ -6305,6 +6324,22 @@
             },
             "params": {
               "$ref": "#/schemas/request/$defs/PluginPaneCloseParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "tab.snap",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TabSnapParams"
             }
           },
           "required": [
