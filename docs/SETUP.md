@@ -16,7 +16,7 @@ This Windows host has no configured FirstMate home. The previous package only es
 
 Full local tool access is the user-requested default inside NEPTUNE for both main CLIs and optional workers. Codex uses --sandbox danger-full-access --ask-for-approval never; Claude uses --permission-mode bypassPermissions. The setting is scoped to active NEPTUNE/Herdr launches. NEPTUNE_FULL_ACCESS=0 retains native defaults; explicit CLI permission flags take precedence. Native managed restrictions remain authoritative. Other destinations must authorize their own permissions; this does not authorize new API spending, credentials, publication, or deployment.
 
-Keep native session commands (`codex resume`, `claude --continue` / `--resume`) and current history. Bare CLI invocation retains native behavior. Do not copy session stores or auth through Git. Keep Herdr restore settings, clipboard, navigation, and the existing sidebar unchanged. CLI names update at session start and every prompt; task roles can remain in worker tab labels.
+Keep native session commands (`codex resume`, `claude --continue` / `--resume`) and current history. Bare CLI invocation retains native behavior. Do not copy session stores or auth through Git. Keep Herdr restore settings, clipboard, navigation, and the existing sidebar unchanged. The sidebar starts with the CLI name. Once the agent understands its assignment, it sets a short role for its own pane. The label persists across follow-up prompts and can change when the assignment changes.
 
 ## Hooks and runtime
 

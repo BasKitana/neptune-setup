@@ -20,17 +20,6 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"require(require('node:path').join(require('node:os').homedir(),'.local','share','neptune','hook-entry.cjs')).run('name','windows','codex')\"",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
