@@ -249,6 +249,8 @@ pub enum Method {
     PluginPaneFocus(PluginPaneFocusParams),
     #[serde(rename = "plugin.pane.close")]
     PluginPaneClose(PluginPaneCloseParams),
+    #[serde(rename = "tab.snap")]
+    TabSnap(TabSnapParams),
 }
 
 #[cfg(test)]

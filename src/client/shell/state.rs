@@ -211,6 +211,7 @@ pub(super) enum ClientChromeDrag {
         tab_id: String,
         workspace_id: String,
         insert_index: Option<usize>,
+        snap: Option<super::snap::SnapTarget>,
     },
     Workspace {
         source_workspace_id: String,

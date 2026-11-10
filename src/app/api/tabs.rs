@@ -213,6 +213,38 @@ impl App {
         encode_success(id, ResponseResult::TabList { tabs })
     }
 
+    pub(super) fn handle_tab_snap(
+        &mut self,
+        id: String,
+        params: crate::api::schema::TabSnapParams,
+    ) -> String {
+        let Some((ws_idx, source_idx)) = self.parse_tab_id(&params.source_tab_id) else {
+            return tab_not_found(id, &params.source_tab_id);
+        };
+        let Some((target_ws_idx, target_pane)) = self.parse_pane_id(&params.target_pane_id) else {
+            return encode_error(id, "pane_not_found", "snap target pane not found");
+        };
+        if ws_idx != target_ws_idx
+            || !self.state.workspaces[ws_idx].snap_tab(source_idx, target_pane, params.edge)
+        {
+            return encode_error(
+                id,
+                "tab_snap_failed",
+                "snap requires separate, unzoomed tabs in one workspace",
+            );
+        }
+
+        self.schedule_session_save();
+        self.emit_event(EventEnvelope {
+            event: EventKind::TabClosed,
+            data: EventData::TabClosed {
+                tab_id: params.source_tab_id,
+                workspace_id: self.public_workspace_id(ws_idx),
+            },
+        });
+        encode_success(id, ResponseResult::Ok {})
+    }
+
     pub(super) fn handle_tab_close(&mut self, id: String, target: TabTarget) -> String {
         let Some((ws_idx, tab_idx)) = self.parse_tab_id(&target.tab_id) else {
             return tab_not_found(id, &target.tab_id);

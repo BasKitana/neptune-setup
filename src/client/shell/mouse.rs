@@ -1192,14 +1192,17 @@ impl ClientShellState {
                     }
                     return;
                 }
-                Some(ClientChromeDrag::Tab { .. }) => {
+                Some(ClientChromeDrag::Tab { tab_id, .. }) => {
                     let insert_index = self.tab_drop_index_at(point);
+                    let snap = self.snap_target_at(tab_id, point);
                     if let Some(ClientChromeDrag::Tab {
                         insert_index: current,
+                        snap: current_snap,
                         ..
                     }) = self.chrome_drag.as_mut()
                     {
                         *current = insert_index;
+                        *current_snap = snap;
                     }
                     outcome.repaint = true;
                     return;
@@ -1243,11 +1246,14 @@ impl ClientShellState {
                     .abs_diff(press.start_column)
                     .max(mouse.row.abs_diff(press.start_row));
                 if delta >= 1 {
-                    if let Some(insert_index) = self.tab_drop_index_at(point) {
+                    let insert_index = self.tab_drop_index_at(point);
+                    let snap = self.snap_target_at(&press.tab_id, point);
+                    if insert_index.is_some() || self.tab_snap_enabled() {
                         self.chrome_drag = Some(ClientChromeDrag::Tab {
                             tab_id: press.tab_id.clone(),
                             workspace_id: press.workspace_id.clone(),
-                            insert_index: Some(insert_index),
+                            insert_index,
+                            snap,
                         });
                         outcome.repaint = true;
                     }
@@ -1280,7 +1286,9 @@ impl ClientShellState {
                                             .count()
                                 })
                         });
-                        if valid_drop {
+                        if let Some(snap) = self.snap_target_at(&tab_id, point) {
+                            self.push_endpoint_method(snap.request(tab_id), outcome);
+                        } else if valid_drop {
                             self.push_endpoint_method(
                                 crate::api::schema::Method::TabMove(
                                     crate::api::schema::TabMoveParams {

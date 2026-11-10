@@ -219,6 +219,31 @@ impl TileLayout {
         true
     }
 
+    pub(crate) fn snap_near(
+        &mut self,
+        target: PaneId,
+        source: Self,
+        edge: crate::api::schema::PaneDirection,
+    ) {
+        use crate::api::schema::PaneDirection;
+        let node = find_pane_mut(&mut self.root, target).expect("validated snap target");
+        let direction = match edge {
+            PaneDirection::Left | PaneDirection::Right => Direction::Horizontal,
+            PaneDirection::Up | PaneDirection::Down => Direction::Vertical,
+        };
+        let (first, second) = if matches!(edge, PaneDirection::Left | PaneDirection::Up) {
+            (source.root, Node::Pane(target))
+        } else {
+            (Node::Pane(target), source.root)
+        };
+        *node = Node::Split {
+            direction,
+            ratio: 0.5,
+            first: Box::new(first),
+            second: Box::new(second),
+        };
+    }
+
     /// Close the focused pane, returning focus to the pane it came from when
     /// that pane is still open. Returns false if it's the last pane.
     pub fn close_focused(&mut self) -> bool {

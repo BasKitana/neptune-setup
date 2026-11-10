@@ -43,6 +43,7 @@ const CLIENT_SHELL_METHODS: &[&str] = &[
     "tab.focus",
     "tab.move",
     "tab.rename",
+    "tab.snap",
     "workspace.close",
     "workspace.create",
     "workspace.focus",

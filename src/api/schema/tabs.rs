@@ -46,3 +46,10 @@ pub struct TabInfo {
     pub pane_count: usize,
     pub agent_status: AgentStatus,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct TabSnapParams {
+    pub source_tab_id: String,
+    pub target_pane_id: String,
+    pub edge: super::PaneDirection,
+}

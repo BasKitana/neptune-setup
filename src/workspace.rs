@@ -588,6 +588,39 @@ impl Workspace {
         true
     }
 
+    pub(crate) fn snap_tab(
+        &mut self,
+        source_idx: usize,
+        target_pane: PaneId,
+        edge: crate::api::schema::PaneDirection,
+    ) -> bool {
+        let Some(target_idx) = self.find_tab_index_for_pane(target_pane) else {
+            return false;
+        };
+        if source_idx == target_idx
+            || self.tabs.get(source_idx).is_none_or(|tab| tab.zoomed)
+            || self.tabs[target_idx].zoomed
+        {
+            return false;
+        }
+
+        // Retain workspace pane registrations and terminal runtimes.
+        let source = self.tabs.remove(source_idx);
+        let target_idx = target_idx - usize::from(source_idx < target_idx);
+        let target = &mut self.tabs[target_idx];
+        target.layout.snap_near(target_pane, source.layout, edge);
+        target.panes.extend(source.panes);
+        #[cfg(test)]
+        target.runtimes.extend(source.runtimes);
+
+        self.active_tab = if self.active_tab == source_idx {
+            target_idx
+        } else {
+            self.active_tab - usize::from(source_idx < self.active_tab)
+        };
+        true
+    }
+
     pub fn move_tab(&mut self, source_idx: usize, insert_idx: usize) -> bool {
         if source_idx >= self.tabs.len() || insert_idx > self.tabs.len() {
             return false;
@@ -1622,6 +1655,43 @@ mod tests {
 
         assert_eq!(ws.display_name_from_terminals(&terminals), "repo");
         assert_eq!(ws.display_name(), "workspace");
+    }
+
+    #[test]
+    fn snap_tab_preserves_live_pane_identity_and_nested_layout() {
+        use crate::api::schema::PaneDirection;
+        use ratatui::layout::Rect;
+
+        let mut ws = Workspace::test_new("snap");
+        let source_root = ws.tabs[0].root_pane;
+        let source_child = ws.test_split(Direction::Vertical);
+        let target_idx = ws.test_add_tab(Some("target"));
+        let target_root = ws.tabs[target_idx].root_pane;
+        let original = [source_root, source_child, target_root].map(|id| {
+            (
+                id,
+                ws.public_pane_number(id).unwrap(),
+                ws.terminal_id(id).unwrap().clone(),
+            )
+        });
+
+        assert!(!ws.snap_tab(0, source_child, PaneDirection::Left));
+        ws.tabs[0].zoomed = true;
+        assert!(!ws.snap_tab(0, target_root, PaneDirection::Left));
+        ws.tabs[0].zoomed = false;
+        assert!(ws.snap_tab(0, target_root, PaneDirection::Left));
+        assert_eq!(ws.tabs.len(), 1);
+        assert_eq!(ws.active_tab, 0);
+        assert_eq!(ws.tabs[0].root_pane, target_root);
+        let areas = ws.tabs[0].layout.panes(Rect::new(0, 0, 80, 24));
+        assert_eq!(areas[0].rect, Rect::new(0, 0, 40, 12));
+        assert_eq!(areas[1].rect, Rect::new(0, 12, 40, 12));
+        assert_eq!(areas[2].rect, Rect::new(40, 0, 40, 24));
+        for (id, number, terminal) in original {
+            assert_eq!(ws.public_pane_number(id), Some(number));
+            assert_eq!(ws.terminal_id(id), Some(&terminal));
+        }
+        ws.assert_invariants_for_test();
     }
 
     #[test]
