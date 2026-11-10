@@ -22,7 +22,7 @@
     "config/windows/herdr.toml": "47ddf036a3d244da21aaf27bb9ba3e3f40c3a70937abc4079f2629e6d7c868e4",
     "config/windows/profile.ps1": "cf1aeaac2334196f4dadea17fcb46bb0a9a340642ddd2f98286b0827fb54cf0d",
     "docs/COMMANDS.md": "c9cc52183101dcd77e1815baa984b1e781098e5f68abc0b98c3143e5da3024f3",
-    "docs/SETUP.md": "9d605d45f117a1e8ca3d1bbbf680d0f5121d33a96ce3fba5f93c77f32fd8bb94",
+    "docs/SETUP.md": "e67cec6d5f2673075f467f0bf970ed5627ee803d52331b81e1beb3f69d7d6275",
     "docs/VERIFICATION.md": "d7e50070dc5779b855453eaf2ecff40f8586607a067123010d54cf217be8b92b",
     "scripts/intelligence/benchmark_output.py": "94c5bb312b4e4a3fdbe5405a4ba3173aa59a881cfa53c74230d8d3d91b38396d",
     "scripts/intelligence/test_compact_output.py": "4e7241d472a6a246ca03d754de96b18d39ee1bfc0c432503872bd55e5bb72842",
