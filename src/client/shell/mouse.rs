@@ -1202,7 +1202,13 @@ impl ClientShellState {
                     }) = self.chrome_drag.as_mut()
                     {
                         *current = insert_index;
-                        *current_snap = snap;
+                        if !current_snap
+                            .as_ref()
+                            .zip(snap.as_ref())
+                            .is_some_and(|(old, new)| old.matches(new))
+                        {
+                            *current_snap = snap;
+                        }
                     }
                     outcome.repaint = true;
                     return;

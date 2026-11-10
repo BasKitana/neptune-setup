@@ -1887,6 +1887,7 @@ impl ClientShellState {
             .min()
             .map(|deadline| deadline.saturating_duration_since(now).min(default))
             .unwrap_or(default)
+            .min(self.snap_preview_timer_delay())
     }
 
     pub(crate) fn invalidate_pane_surface(&mut self) {

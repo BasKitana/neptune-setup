@@ -2,14 +2,19 @@ use super::*;
 use crate::api::schema::{Method, PaneDirection, TabSnapParams};
 use ratatui::style::Color;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(super) struct SnapTarget {
     pane_id: String,
     edge: PaneDirection,
     preview: Rect,
+    pub(super) animation: super::snap_animation::SnapAnimation,
 }
 
 impl SnapTarget {
+    pub(super) fn matches(&self, other: &Self) -> bool {
+        self.pane_id == other.pane_id && self.edge == other.edge && self.preview == other.preview
+    }
+
     pub(super) fn request(self, source_tab_id: String) -> Method {
         Method::TabSnap(TabSnapParams {
             source_tab_id,
@@ -67,6 +72,7 @@ impl ClientShellState {
             pane_id: hit.pane_id.clone(),
             edge,
             preview,
+            animation: super::snap_animation::SnapAnimation::new(),
         })
     }
 
@@ -77,7 +83,10 @@ impl ClientShellState {
         else {
             return;
         };
-        draw_outline(frame, snap.preview, self.config.palette.accent);
+        let preview = snap
+            .animation
+            .region(snap.preview, snap.edge, std::time::Instant::now());
+        draw_outline(frame, preview, self.config.palette.accent);
     }
 }
 

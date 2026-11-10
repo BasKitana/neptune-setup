@@ -25,6 +25,7 @@ mod link_hover;
 mod mobile;
 mod mouse;
 mod snap;
+mod snap_animation;
 mod notification_policy;
 mod notifications;
 mod overlay_input;
