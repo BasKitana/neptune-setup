@@ -302,6 +302,23 @@ impl App {
             Node::Pane(pane_id) => Some(LayoutNode::Pane {
                 pane: self.layout_pane_description(ws_idx, tab_idx, *pane_id)?,
             }),
+            Node::Stack { panes, .. } => {
+                let mut leaves = panes.iter().map(|id| {
+                    Some(LayoutNode::Pane {
+                        pane: self.layout_pane_description(ws_idx, tab_idx, *id)?,
+                    })
+                });
+                let mut root = leaves.next()??;
+                for leaf in leaves {
+                    root = LayoutNode::Split {
+                        direction: SplitDirection::Right,
+                        ratio: 0.5,
+                        first: Box::new(root),
+                        second: Box::new(leaf?),
+                    };
+                }
+                Some(root)
+            }
             Node::Split {
                 direction,
                 ratio,

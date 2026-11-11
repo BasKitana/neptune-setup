@@ -239,6 +239,26 @@ pub(super) fn snapshot_with_completions(
                 preview: notes.preview,
             });
 
+    let pane_stacks = focused_tab_id
+        .as_deref()
+        .and_then(|id| app.parse_tab_id(id))
+        .map(|(workspace, index)| {
+            app.state.workspaces[workspace].tabs[index]
+                .layout
+                .stacks()
+                .into_iter()
+                .filter_map(|(active, panes)| {
+                    Some((
+                        app.public_pane_id(workspace, active)?,
+                        panes
+                            .iter()
+                            .filter_map(|pane| app.public_pane_id(workspace, *pane))
+                            .collect(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let shell = protocol::ClientShellSnapshot {
         boot_id: boot_id.to_owned(),
         revision,
@@ -258,6 +278,7 @@ pub(super) fn snapshot_with_completions(
         tab_bar_right_separator: app.state.tab_bar_right_separator.clone(),
         agent_view_label,
         agent_order,
+        pane_stacks,
         workspaces,
         tabs,
         panes,

@@ -694,3 +694,9 @@ pub struct PaneLinkRegion {
     pub start_col: u16,
     pub end_col: u16,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneStackParams {
+    pub source_pane_id: String,
+    pub target_pane_id: String,
+}

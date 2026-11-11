@@ -1193,18 +1193,29 @@ impl ClientShellState {
                     return;
                 }
                 Some(ClientChromeDrag::PaneToTab {
-                    start, dragging, ..
+                    pane_id,
+                    start,
+                    dragging,
+                    ..
                 }) => {
                     let dragging = *dragging || *start != point;
                     let over_tab_bar = dragging && self.pane_to_tab_drop_at(point);
+                    let stack_preview = if dragging && !over_tab_bar {
+                        self.pane_stack_target_at(pane_id, point)
+                            .map(|(_, rect)| rect)
+                    } else {
+                        None
+                    };
                     if let Some(ClientChromeDrag::PaneToTab {
                         dragging: current_dragging,
                         over_tab_bar: current_target,
+                        stack_preview: current_stack_preview,
                         ..
                     }) = self.chrome_drag.as_mut()
                     {
                         *current_dragging = dragging;
                         *current_target = over_tab_bar;
+                        *current_stack_preview = stack_preview;
                     }
                     outcome.repaint = true;
                     return;
@@ -2254,6 +2265,17 @@ impl ClientShellState {
                         self.push_pane_scroll_offset(hit.pane_id, offset, outcome);
                     }
                     return;
+                }
+                let stack_tab = self
+                    .hits
+                    .stack_tabs
+                    .iter()
+                    .find(|(rect, _)| super::contains(*rect, point))
+                    .map(|(_, id)| id.clone());
+                if let Some(pane_id) = stack_tab {
+                    if self.start_pane_to_tab(pane_id, point) {
+                        return;
+                    }
                 }
                 let pane_header = self.hits.panes.iter().find(|hit| {
                     super::contains(hit.rect, point)

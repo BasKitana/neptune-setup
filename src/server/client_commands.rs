@@ -34,6 +34,7 @@ const CLIENT_SHELL_METHODS: &[&str] = &[
     "pane.scroll",
     "pane.selection.read",
     "pane.split",
+    "pane.stack",
     "pane.swap",
     "pane.zoom",
     "product_announcement.dismiss",
@@ -307,6 +308,11 @@ mod tests {
         assert_eq!(
             actual.remove("tab.snap").as_deref(),
             Some("7ceed559e809741acd2fad6134694ac3548b69b5e08ee1b2b4eb50b6ab533796")
+        );
+
+        assert_eq!(
+            actual.remove("pane.stack").as_deref(),
+            Some("16bbff0328690068a56a8dd65be87d9edc20967da8848118a5f877f768e5eefa")
         );
 
         assert_eq!(

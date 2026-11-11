@@ -90,6 +90,7 @@ pub(super) struct ShellHitMap {
     pub(super) workspace_scroll_metrics: Option<crate::pane::ScrollMetrics>,
     pub(super) workspace_max_scroll: usize,
     pub(super) tabs: Vec<(Rect, String)>,
+    pub(super) stack_tabs: Vec<(Rect, String)>,
     pub(super) panes: Vec<PaneHit>,
     pub(super) popup: Option<PaneHit>,
     pub(super) pane_splits: Vec<PaneSplitHit>,
@@ -218,6 +219,7 @@ pub(super) enum ClientChromeDrag {
         start: (u16, u16),
         dragging: bool,
         over_tab_bar: bool,
+        stack_preview: Option<Rect>,
     },
     Workspace {
         source_workspace_id: String,

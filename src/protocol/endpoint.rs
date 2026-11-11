@@ -109,7 +109,13 @@ pub struct EndpointServerWelcome {
 pub fn snapshot_message(snapshot: &ClientShellSnapshot) -> serde_json::Result<ServerMessage> {
     Ok(ServerMessage::EndpointControl {
         kind: ENDPOINT_SNAPSHOT_KIND.into(),
-        data: serde_json::to_string(snapshot)?,
+        data: if snapshot.pane_stacks.is_empty() {
+            serde_json::to_string(snapshot)?
+        } else {
+            let mut data = serde_json::to_value(snapshot)?;
+            data["pane_stacks"] = serde_json::to_value(&snapshot.pane_stacks)?;
+            serde_json::to_string(&data)?
+        },
     })
 }
 
@@ -242,6 +248,7 @@ mod tests {
             tab_bar_right_separator: String::new(),
             agent_view_label: None,
             agent_order: Vec::new(),
+            pane_stacks: Default::default(),
             workspaces: Vec::new(),
             tabs: Vec::new(),
             panes: Vec::new(),

@@ -944,6 +944,36 @@ impl App {
         )
     }
 
+    pub(super) fn handle_pane_stack(
+        &mut self,
+        id: String,
+        params: crate::api::schema::PaneStackParams,
+    ) -> String {
+        let Some((workspace, source)) = self.parse_pane_id(&params.source_pane_id) else {
+            return encode_error(id, "pane_not_found", "stack source pane not found");
+        };
+        let Some((target_workspace, target)) = self.parse_pane_id(&params.target_pane_id) else {
+            return encode_error(id, "pane_not_found", "stack target pane not found");
+        };
+        let ws = &mut self.state.workspaces[workspace];
+        let source_tab = ws.find_tab_index_for_pane(source);
+        let target_tab = ws.find_tab_index_for_pane(target);
+        if workspace != target_workspace
+            || source_tab != target_tab
+            || !target_tab
+                .and_then(|index| ws.tabs.get_mut(index))
+                .is_some_and(|tab| !tab.zoomed && tab.layout.stack_pane(source, target))
+        {
+            return encode_error(
+                id,
+                "pane_stack_failed",
+                "stack requires two different panels in the same unzoomed tab",
+            );
+        }
+        self.schedule_session_save();
+        encode_success(id, ResponseResult::Ok {})
+    }
+
     pub(super) fn handle_pane_move(&mut self, id: String, params: PaneMoveParams) -> String {
         let PaneMoveParams {
             pane_id,

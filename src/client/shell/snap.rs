@@ -77,6 +77,14 @@ impl ClientShellState {
     }
 
     pub(super) fn draw_snap_preview(&self, frame: &mut FrameData) {
+        if let Some(ClientChromeDrag::PaneToTab {
+            stack_preview: Some(rect),
+            ..
+        }) = &self.chrome_drag
+        {
+            draw_outline(frame, *rect, self.config.palette.accent);
+            return;
+        }
         let Some(ClientChromeDrag::Tab {
             snap: Some(snap), ..
         }) = &self.chrome_drag
@@ -215,12 +223,42 @@ impl ClientShellState {
             start: point,
             dragging: false,
             over_tab_bar: false,
+            stack_preview: None,
         });
         true
     }
 
     pub(super) fn pane_to_tab_drop_at(&self, point: (u16, u16)) -> bool {
         contains(self.hits.new_tab, point) || self.tab_drop_index_at(point).is_some()
+    }
+
+    pub(super) fn pane_stack_target_at(
+        &self,
+        source: &str,
+        point: (u16, u16),
+    ) -> Option<(&str, Rect)> {
+        let pane = self.detachable_pane(source)?;
+        let snapshot = self.snapshot.as_ref()?;
+        if snapshot.focused_tab_id.as_deref() != Some(&pane.tab_id)
+            || self.pending_pane_surface.is_some()
+        {
+            return None;
+        }
+        let hit = self
+            .hits
+            .panes
+            .iter()
+            .find(|hit| contains(hit.inner_rect, point))?;
+        if hit.pane_id == source
+            || snapshot
+                .pane_stacks
+                .get(&hit.pane_id)
+                .is_some_and(|members| members.iter().any(|id| id == source))
+            || snap_region(hit.rect, point).is_some()
+        {
+            return None;
+        }
+        Some((&hit.pane_id, hit.rect))
     }
 
     pub(super) fn finish_pane_to_tab(
@@ -233,6 +271,14 @@ impl ClientShellState {
         use crate::api::schema::{PaneMoveDestination, PaneMoveParams, PaneTarget};
         if !dragging {
             self.push_endpoint_method(Method::PaneFocus(PaneTarget { pane_id }), outcome);
+        } else if let Some((target, _)) = self.pane_stack_target_at(&pane_id, point) {
+            self.push_endpoint_method(
+                Method::PaneStack(crate::api::schema::PaneStackParams {
+                    source_pane_id: pane_id,
+                    target_pane_id: target.to_owned(),
+                }),
+                outcome,
+            );
         } else if self.pane_to_tab_drop_at(point) {
             if let Some(pane) = self.detachable_pane(&pane_id) {
                 let destination = PaneMoveDestination::NewTab {
@@ -251,4 +297,71 @@ impl ClientShellState {
         }
         outcome.repaint = true;
     }
+}
+
+pub(super) fn draw_stack_tabs(
+    frame: &mut FrameData,
+    snapshot: &ClientShellSnapshot,
+    panes: &[PaneHit],
+    palette: &Palette,
+) -> Vec<(Rect, String)> {
+    if snapshot.pane_stacks.is_empty() {
+        return Vec::new();
+    }
+    let mut hits = Vec::new();
+    for pane in panes {
+        let Some(members) = snapshot.pane_stacks.get(&pane.pane_id) else {
+            continue;
+        };
+        let available = pane.rect.width.saturating_sub(2);
+        let count = members.len().min(usize::from(available));
+        if count == 0 || pane.rect.y >= frame.height || pane.inner_rect.y <= pane.rect.y {
+            continue;
+        }
+        let mut x = pane.rect.x + 1;
+        for (index, member) in members.iter().take(count).enumerate() {
+            let width = (available - (x - pane.rect.x - 1)) / ((count - index) as u16);
+            let area = Rect::new(x, pane.rect.y, width, 1);
+            let Some(entry) = snapshot.panes.iter().find(|entry| &entry.pane_id == member) else {
+                x += width;
+                continue;
+            };
+            let label = snapshot
+                .agents
+                .iter()
+                .find(|agent| &agent.pane_id == member)
+                .and_then(|agent| agent.name.as_deref())
+                .or(entry.label.as_deref())
+                .or_else(|| {
+                    entry
+                        .cwd
+                        .as_deref()
+                        .and_then(|cwd| cwd.rsplit(['/', '\\']).find(|part| !part.is_empty()))
+                })
+                .unwrap_or(member);
+            let mut buffer = Buffer::empty(area);
+            let style = if member == &pane.pane_id {
+                Style::default().fg(palette.panel_bg).bg(palette.accent)
+            } else {
+                Style::default().fg(palette.text).bg(palette.surface0)
+            };
+            buffer.set_style(area, style);
+            render::put_text(
+                &mut buffer,
+                area.x,
+                area.y,
+                width,
+                &format!(" {label} "),
+                style,
+            );
+            let offset = usize::from(area.y) * usize::from(frame.width);
+            for col in area.x..area.right().min(frame.width) {
+                frame.cells[offset + usize::from(col)] =
+                    crate::protocol::CellData::from_ratatui_cell(&buffer[(col, area.y)]);
+            }
+            hits.push((area, member.clone()));
+            x += width;
+        }
+    }
+    hits
 }

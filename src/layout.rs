@@ -72,6 +72,10 @@ pub enum NavDirection {
 /// A node in the BSP tree. Public for serialization.
 pub enum Node {
     Pane(PaneId),
+    Stack {
+        active: PaneId,
+        panes: Vec<PaneId>,
+    },
     Split {
         direction: Direction,
         ratio: f32,
@@ -108,10 +112,55 @@ impl TileLayout {
 
     /// Move focus, recording the pane being left. No-op when focus is unchanged.
     fn set_focus(&mut self, id: PaneId) {
+        if let Some(Node::Stack { active, .. }) = find_pane_mut(&mut self.root, id) {
+            *active = id;
+        }
         if id != self.focus {
             self.prev_focus = Some(self.focus);
             self.focus = id;
         }
+    }
+
+    pub(crate) fn stack_pane(&mut self, source: PaneId, target: PaneId) -> bool {
+        if source == target || find_pane_mut(&mut self.root, target).is_none() {
+            return false;
+        }
+        if matches!(find_pane_mut(&mut self.root, source), Some(Node::Stack { panes, .. }) if panes.contains(&target))
+        {
+            return false;
+        }
+        if !self.close_pane(source) {
+            return false;
+        }
+        let slot = find_pane_mut(&mut self.root, target).expect("target survives stack");
+        match slot {
+            Node::Stack { panes, .. } => panes.push(source),
+            Node::Pane(_) => {
+                *slot = Node::Stack {
+                    active: target,
+                    panes: vec![target, source],
+                }
+            }
+            Node::Split { .. } => unreachable!("stack target is a leaf"),
+        }
+        self.set_focus(target);
+        true
+    }
+
+    pub(crate) fn stacks(&self) -> Vec<(PaneId, &[PaneId])> {
+        fn collect<'a>(node: &'a Node, stacks: &mut Vec<(PaneId, &'a [PaneId])>) {
+            match node {
+                Node::Stack { active, panes } => stacks.push((*active, panes)),
+                Node::Split { first, second, .. } => {
+                    collect(first, stacks);
+                    collect(second, stacks);
+                }
+                Node::Pane(_) => {}
+            }
+        }
+        let mut stacks = Vec::new();
+        collect(&self.root, &mut stacks);
+        stacks
     }
 
     pub fn focused(&self) -> PaneId {
@@ -187,7 +236,7 @@ impl TileLayout {
     ) -> Option<PaneId> {
         let node = find_pane_mut(&mut self.root, target)?;
         let new_id = PaneId::alloc();
-        *node = split_node(target, direction, new_id, valid_split_ratio(ratio));
+        *node = split_node(node, direction, new_id, valid_split_ratio(ratio));
         Some(new_id)
     }
 
@@ -212,7 +261,7 @@ impl TileLayout {
         let Some(node) = find_pane_mut(&mut self.root, target) else {
             return false;
         };
-        *node = split_node(target, direction, moved, valid_split_ratio(ratio));
+        *node = split_node(node, direction, moved, valid_split_ratio(ratio));
         if focus {
             self.set_focus(moved);
         }
@@ -231,10 +280,11 @@ impl TileLayout {
             PaneDirection::Left | PaneDirection::Right => Direction::Horizontal,
             PaneDirection::Up | PaneDirection::Down => Direction::Vertical,
         };
+        let target_node = std::mem::replace(node, Node::Pane(target));
         let (first, second) = if matches!(edge, PaneDirection::Left | PaneDirection::Up) {
-            (source.root, Node::Pane(target))
+            (source.root, target_node)
         } else {
-            (Node::Pane(target), source.root)
+            (target_node, source.root)
         };
         *node = Node::Split {
             direction,
@@ -266,7 +316,7 @@ impl TileLayout {
         let old = std::mem::replace(&mut self.root, Node::Pane(placeholder));
         if let Some(new_root) = remove_pane(old, target) {
             self.root = new_root;
-            self.focus = new_focus;
+            self.set_focus(new_focus);
             self.prev_focus = None;
             true
         } else {
@@ -312,6 +362,7 @@ impl TileLayout {
             return false;
         }
         swap_pane_ids(&mut self.root, first, second);
+        self.set_focus(self.focus);
         true
     }
 
@@ -520,20 +571,25 @@ fn range_center_distance(a_start: u16, a_len: u16, b_start: u16, b_len: u16) -> 
 fn count_panes(node: &Node) -> usize {
     match node {
         Node::Pane(_) => 1,
+        Node::Stack { panes, .. } => panes.len(),
         Node::Split { first, second, .. } => count_panes(first) + count_panes(second),
     }
 }
 
 fn collect_panes(node: &Node, area: Rect, focus: PaneId, result: &mut Vec<PaneInfo>) {
     match node {
-        Node::Pane(id) => {
+        Node::Pane(id) | Node::Stack { active: id, .. } => {
             result.push(PaneInfo {
                 id: *id,
                 rect: area,
                 // inner_rect is set during render when we know if borders are shown
                 inner_rect: area,
                 scrollbar_rect: None,
-                borders: Borders::NONE,
+                borders: if matches!(node, Node::Stack { .. }) {
+                    Borders::TOP
+                } else {
+                    Borders::NONE
+                },
                 is_focused: *id == focus,
             });
         }
@@ -582,6 +638,7 @@ fn collect_splits(node: &Node, area: Rect, path: &mut Vec<bool>, result: &mut Ve
 fn collect_ids(node: &Node, ids: &mut Vec<PaneId>) {
     match node {
         Node::Pane(id) => ids.push(*id),
+        Node::Stack { panes, .. } => ids.extend(panes),
         Node::Split { first, second, .. } => {
             collect_ids(first, ids);
             collect_ids(second, ids);
@@ -592,7 +649,7 @@ fn collect_ids(node: &Node, ids: &mut Vec<PaneId>) {
 fn split_ratios(node: &Node) -> Vec<(Vec<bool>, f32)> {
     fn collect(node: &Node, path: &mut Vec<bool>, out: &mut Vec<(Vec<bool>, f32)>) {
         match node {
-            Node::Pane(_) => {}
+            Node::Pane(_) | Node::Stack { .. } => {}
             Node::Split {
                 ratio,
                 first,
@@ -620,6 +677,15 @@ fn swap_pane_ids(node: &mut Node, first: PaneId, second: PaneId) {
         Node::Pane(id) if *id == first => *id = second,
         Node::Pane(id) if *id == second => *id = first,
         Node::Pane(_) => {}
+        Node::Stack { active, panes } => {
+            for id in std::iter::once(active).chain(panes.iter_mut()) {
+                if *id == first {
+                    *id = second;
+                } else if *id == second {
+                    *id = first;
+                }
+            }
+        }
         Node::Split {
             first: first_child,
             second: second_child,
@@ -634,18 +700,20 @@ fn swap_pane_ids(node: &mut Node, first: PaneId, second: PaneId) {
 fn find_pane_mut(node: &mut Node, target: PaneId) -> Option<&mut Node> {
     match node {
         Node::Pane(id) if *id == target => Some(node),
-        Node::Pane(_) => None,
+        Node::Stack { panes, .. } if panes.contains(&target) => Some(node),
+        Node::Pane(_) | Node::Stack { .. } => None,
         Node::Split { first, second, .. } => {
             find_pane_mut(first, target).or_else(|| find_pane_mut(second, target))
         }
     }
 }
 
-fn split_node(target: PaneId, direction: Direction, new_id: PaneId, split_ratio: f32) -> Node {
+fn split_node(target: &mut Node, direction: Direction, new_id: PaneId, split_ratio: f32) -> Node {
+    let existing = std::mem::replace(target, Node::Pane(new_id));
     Node::Split {
         direction,
         ratio: split_ratio,
-        first: Box::new(Node::Pane(target)),
+        first: Box::new(existing),
         second: Box::new(Node::Pane(new_id)),
     }
 }
@@ -662,6 +730,20 @@ fn remove_pane(node: Node, target: PaneId) -> Option<Node> {
     match node {
         Node::Pane(id) if id == target => None,
         Node::Pane(_) => Some(node),
+        Node::Stack {
+            mut active,
+            mut panes,
+        } => {
+            panes.retain(|pane| *pane != target);
+            if active == target {
+                active = *panes.first()?;
+            }
+            if panes.len() == 1 {
+                Some(Node::Pane(active))
+            } else {
+                Some(Node::Stack { active, panes })
+            }
+        }
         Node::Split {
             direction,
             ratio,
@@ -748,6 +830,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pane_stack_changes_geometry_and_focus_without_losing_members() {
+        let (mut layout, left) = TileLayout::new();
+        let middle = layout.split_focused(Direction::Horizontal);
+        let right = layout.split_focused(Direction::Horizontal);
+        let area = Rect::new(0, 0, 80, 24);
+
+        assert!(layout.stack_pane(middle, right));
+        assert_eq!(
+            layout
+                .panes(area)
+                .iter()
+                .map(|pane| pane.id)
+                .collect::<Vec<_>>(),
+            vec![left, right]
+        );
+        assert!(!layout.stack_pane(middle, right));
+        layout.focus_pane(middle);
+        assert_eq!(layout.focused(), middle);
+        assert!(layout.stack_pane(left, middle));
+        assert_eq!(layout.panes(area)[0].rect, area);
+        assert_eq!(layout.panes(area).len(), 1);
+        assert_eq!(layout.pane_count(), 3);
+        assert!(layout.close_pane(middle));
+        assert!(layout.close_pane(right));
+        assert_eq!(layout.pane_ids(), vec![left]);
+        assert_eq!(layout.focused(), left);
+    }
+
+    #[test]
     fn split_paths_preserve_preorder_geometry_and_resize_targets() {
         let ids = [
             PaneId::alloc(),
@@ -759,8 +870,18 @@ mod tests {
             Node::Split {
                 direction: Direction::Horizontal,
                 ratio: 0.5,
-                first: Box::new(split_node(ids[0], Direction::Vertical, ids[1], 0.5)),
-                second: Box::new(split_node(ids[2], Direction::Vertical, ids[3], 0.25)),
+                first: Box::new(split_node(
+                    &mut Node::Pane(ids[0]),
+                    Direction::Vertical,
+                    ids[1],
+                    0.5,
+                )),
+                second: Box::new(split_node(
+                    &mut Node::Pane(ids[2]),
+                    Direction::Vertical,
+                    ids[3],
+                    0.25,
+                )),
             },
             ids[0],
         );
@@ -963,7 +1084,7 @@ mod tests {
     fn split_snapshot(layout: &TileLayout) -> Vec<(Direction, f32)> {
         fn collect(node: &Node, out: &mut Vec<(Direction, f32)>) {
             match node {
-                Node::Pane(_) => {}
+                Node::Pane(_) | Node::Stack { .. } => {}
                 Node::Split {
                     direction,
                     ratio,

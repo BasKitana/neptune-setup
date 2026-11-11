@@ -54,8 +54,18 @@ pub(crate) fn decode_endpoint_control(
         ));
     }
     if kind == crate::protocol::endpoint::ENDPOINT_SNAPSHOT_KIND {
-        let snapshot = serde_json::from_str(data)
+        let mut snapshot: crate::protocol::ClientShellSnapshot = serde_json::from_str(data)
             .map_err(|error| format!("invalid endpoint snapshot: {error}"))?;
+        if data.contains("\"pane_stacks\"") {
+            #[derive(serde::Deserialize)]
+            struct StackMetadata {
+                #[serde(default)]
+                pane_stacks: std::collections::BTreeMap<String, Vec<String>>,
+            }
+            snapshot.pane_stacks = serde_json::from_str::<StackMetadata>(data)
+                .map_err(|error| format!("invalid pane stacks: {error}"))?
+                .pane_stacks;
+        }
         return Ok(EndpointControlMessage::Snapshot(Box::new(snapshot)));
     }
     if kind.starts_with("shell.snapshot.") {

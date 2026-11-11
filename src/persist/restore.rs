@@ -149,6 +149,7 @@ fn collect_snapshot_pane_ids(node: &LayoutSnapshot) -> Vec<u32> {
 fn collect_snapshot_ids_inner(node: &LayoutSnapshot, ids: &mut Vec<u32>) {
     match node {
         LayoutSnapshot::Pane(id) => ids.push(*id),
+        LayoutSnapshot::Stack { panes, .. } => ids.extend(panes),
         LayoutSnapshot::Split { first, second, .. } => {
             collect_snapshot_ids_inner(first, ids);
             collect_snapshot_ids_inner(second, ids);
@@ -178,6 +179,7 @@ fn migrated_public_pane_numbers_by_old_raw(
 fn collect_layout_snapshot_pane_ids(node: &LayoutSnapshot, ids: &mut Vec<u32>) {
     match node {
         LayoutSnapshot::Pane(id) => ids.push(*id),
+        LayoutSnapshot::Stack { panes, .. } => ids.extend(panes),
         LayoutSnapshot::Split { first, second, .. } => {
             collect_layout_snapshot_pane_ids(first, ids);
             collect_layout_snapshot_pane_ids(second, ids);
@@ -923,6 +925,20 @@ fn take_restore_plan_for_snapshot(
 pub(super) fn prune_restored_node(node: Node, surviving: &HashSet<PaneId>) -> Option<Node> {
     match node {
         Node::Pane(id) => surviving.contains(&id).then_some(Node::Pane(id)),
+        Node::Stack { active, mut panes } => {
+            panes.retain(|pane| surviving.contains(pane));
+            let first = *panes.first()?;
+            let active = if panes.contains(&active) {
+                active
+            } else {
+                first
+            };
+            Some(if panes.len() == 1 {
+                Node::Pane(active)
+            } else {
+                Node::Stack { active, panes }
+            })
+        }
         Node::Split {
             direction,
             ratio,
@@ -972,6 +988,24 @@ fn remap_inner(snap: &LayoutSnapshot, id_map: &mut HashMap<u32, PaneId>) -> Node
             id_map.insert(*old_id, new_id);
             Node::Pane(new_id)
         }
+        LayoutSnapshot::Stack { active, panes } => {
+            let panes: Vec<_> = panes
+                .iter()
+                .map(|old_id| {
+                    let new_id = PaneId::alloc();
+                    id_map.insert(*old_id, new_id);
+                    new_id
+                })
+                .collect();
+            if let Some(first) = panes.first() {
+                Node::Stack {
+                    active: id_map.get(active).copied().unwrap_or(*first),
+                    panes,
+                }
+            } else {
+                Node::Pane(PaneId::alloc())
+            }
+        }
         LayoutSnapshot::Split {
             direction,
             ratio,
@@ -1003,6 +1037,7 @@ pub(super) fn collect_pane_ids(node: &Node) -> Vec<PaneId> {
 fn collect_ids_inner(node: &Node, ids: &mut Vec<PaneId>) {
     match node {
         Node::Pane(id) => ids.push(*id),
+        Node::Stack { panes, .. } => ids.extend(panes),
         Node::Split { first, second, .. } => {
             collect_ids_inner(first, ids);
             collect_ids_inner(second, ids);
@@ -1013,6 +1048,27 @@ fn collect_ids_inner(node: &Node, ids: &mut Vec<PaneId>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pane_stack_snapshot_round_trips_active_member() {
+        let (mut layout, first) = crate::layout::TileLayout::new();
+        let second = layout.split_focused(Direction::Horizontal);
+        assert!(layout.stack_pane(second, first));
+        layout.focus_pane(second);
+
+        let saved = super::super::snapshot::capture_node(layout.root());
+        let saved: LayoutSnapshot =
+            serde_json::from_str(&serde_json::to_string(&saved).unwrap()).unwrap();
+        let (restored, ids) = restore_node_remapped(&saved);
+        let restored = crate::layout::TileLayout::from_saved(restored, ids[&second.raw()]);
+        assert_eq!(
+            restored.stacks(),
+            vec![(
+                ids[&second.raw()],
+                &[ids[&first.raw()], ids[&second.raw()]][..]
+            )]
+        );
+    }
 
     fn test_session_path(name: &str) -> String {
         std::env::current_dir()

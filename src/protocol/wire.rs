@@ -943,6 +943,9 @@ pub struct ClientShellSnapshot {
     pub tab_bar_right_separator: String,
     pub agent_view_label: Option<String>,
     pub agent_order: Vec<String>,
+    // Named JSON endpoint metadata. Leave the legacy bincode payload unchanged.
+    #[serde(skip)]
+    pub pane_stacks: std::collections::BTreeMap<String, Vec<String>>,
     pub workspaces: Vec<ClientShellWorkspace>,
     pub tabs: Vec<ClientShellTab>,
     pub panes: Vec<ClientShellPane>,
@@ -2817,6 +2820,7 @@ mod tests {
             tab_bar_right_separator: " · ".into(),
             agent_view_label: None,
             agent_order: Vec::new(),
+            pane_stacks: Default::default(),
             workspaces: vec![ClientShellWorkspace {
                 workspace_id: "w1".into(),
                 active_tab_id: "w1:t1".into(),

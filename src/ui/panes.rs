@@ -231,6 +231,7 @@ pub(crate) fn apply_pane_chrome(
                 }
             }
 
+            let has_stack_tabs = info.borders.contains(Borders::TOP);
             info.borders = if !bordered {
                 Borders::NONE
             } else {
@@ -259,6 +260,9 @@ pub(crate) fn apply_pane_chrome(
                 }
                 borders
             };
+            if has_stack_tabs {
+                info.borders.insert(Borders::TOP);
+            }
             info
         })
         .collect()
