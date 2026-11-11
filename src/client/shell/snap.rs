@@ -305,14 +305,16 @@ pub(super) fn draw_stack_tabs(
     panes: &[PaneHit],
     palette: &Palette,
 ) -> Vec<(Rect, String)> {
-    if snapshot.pane_stacks.is_empty() {
+    if panes.len() < 2 && snapshot.pane_stacks.is_empty() {
         return Vec::new();
     }
     let mut hits = Vec::new();
     for pane in panes {
-        let Some(members) = snapshot.pane_stacks.get(&pane.pane_id) else {
-            continue;
-        };
+        let members = snapshot
+            .pane_stacks
+            .get(&pane.pane_id)
+            .map(Vec::as_slice)
+            .unwrap_or_else(|| std::slice::from_ref(&pane.pane_id));
         let available = pane.rect.width.saturating_sub(2);
         let count = members.len().min(usize::from(available));
         if count == 0 || pane.rect.y >= frame.height || pane.inner_rect.y <= pane.rect.y {
