@@ -183,3 +183,72 @@ mod tests {
         assert!(snap_region(Rect::new(0, 0, 8, 5), (0, 0)).is_none());
     }
 }
+
+impl ClientShellState {
+    fn detachable_pane(&self, pane_id: &str) -> Option<&crate::protocol::ClientShellPane> {
+        if !self.tab_snap_enabled() || self.overlay.is_some() || self.hits.popup.is_some() {
+            return None;
+        }
+        let snapshot = self.snapshot.as_ref()?;
+        let pane = snapshot.panes.iter().find(|pane| pane.pane_id == pane_id)?;
+        if snapshot.focused_workspace_id.as_deref() != Some(&pane.workspace_id)
+            || !snapshot
+                .tabs
+                .iter()
+                .any(|tab| tab.tab_id == pane.tab_id && !tab.zoomed)
+            || !snapshot
+                .panes
+                .iter()
+                .any(|other| other.tab_id == pane.tab_id && other.pane_id != pane_id)
+        {
+            return None;
+        }
+        Some(pane)
+    }
+
+    pub(super) fn start_pane_to_tab(&mut self, pane_id: String, point: (u16, u16)) -> bool {
+        if self.detachable_pane(&pane_id).is_none() {
+            return false;
+        }
+        self.chrome_drag = Some(ClientChromeDrag::PaneToTab {
+            pane_id,
+            start: point,
+            dragging: false,
+            over_tab_bar: false,
+        });
+        true
+    }
+
+    pub(super) fn pane_to_tab_drop_at(&self, point: (u16, u16)) -> bool {
+        contains(self.hits.new_tab, point) || self.tab_drop_index_at(point).is_some()
+    }
+
+    pub(super) fn finish_pane_to_tab(
+        &mut self,
+        pane_id: String,
+        dragging: bool,
+        point: (u16, u16),
+        outcome: &mut ClientShellInput,
+    ) {
+        use crate::api::schema::{PaneMoveDestination, PaneMoveParams, PaneTarget};
+        if !dragging {
+            self.push_endpoint_method(Method::PaneFocus(PaneTarget { pane_id }), outcome);
+        } else if self.pane_to_tab_drop_at(point) {
+            if let Some(pane) = self.detachable_pane(&pane_id) {
+                let destination = PaneMoveDestination::NewTab {
+                    workspace_id: Some(pane.workspace_id.clone()),
+                    label: pane.label.clone(),
+                };
+                self.push_endpoint_method(
+                    Method::PaneMove(PaneMoveParams {
+                        pane_id,
+                        destination,
+                        focus: true,
+                    }),
+                    outcome,
+                );
+            }
+        }
+        outcome.repaint = true;
+    }
+}

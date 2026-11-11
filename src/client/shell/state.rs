@@ -213,6 +213,12 @@ pub(super) enum ClientChromeDrag {
         insert_index: Option<usize>,
         snap: Option<super::snap::SnapTarget>,
     },
+    PaneToTab {
+        pane_id: String,
+        start: (u16, u16),
+        dragging: bool,
+        over_tab_bar: bool,
+    },
     Workspace {
         source_workspace_id: String,
         target: Option<(Option<String>, u16)>,

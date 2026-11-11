@@ -192,6 +192,9 @@ impl ClientShellState {
         }
         let tab_drag_insert_index = match &self.chrome_drag {
             Some(ClientChromeDrag::Tab { insert_index, .. }) => *insert_index,
+            Some(ClientChromeDrag::PaneToTab {
+                over_tab_bar: true, ..
+            }) => Some(self.focused_tab_count()),
             _ => None,
         };
         let (dragged_workspace_id, workspace_drop_indicator_row) = match &self.chrome_drag {

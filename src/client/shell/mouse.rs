@@ -450,7 +450,7 @@ impl ClientShellState {
         ((pointer + grab_offset - origin) as f32 / f32::from(length.max(1))).clamp(0.1, 0.9)
     }
 
-    fn tab_drop_index_at(&self, point: (u16, u16)) -> Option<usize> {
+    pub(super) fn tab_drop_index_at(&self, point: (u16, u16)) -> Option<usize> {
         let snapshot = self.snapshot.as_deref()?;
         let workspace_id = snapshot.focused_workspace_id.as_deref()?;
         let tabs = snapshot
@@ -1192,6 +1192,23 @@ impl ClientShellState {
                     }
                     return;
                 }
+                Some(ClientChromeDrag::PaneToTab {
+                    start, dragging, ..
+                }) => {
+                    let dragging = *dragging || *start != point;
+                    let over_tab_bar = dragging && self.pane_to_tab_drop_at(point);
+                    if let Some(ClientChromeDrag::PaneToTab {
+                        dragging: current_dragging,
+                        over_tab_bar: current_target,
+                        ..
+                    }) = self.chrome_drag.as_mut()
+                    {
+                        *current_dragging = dragging;
+                        *current_target = over_tab_bar;
+                    }
+                    outcome.repaint = true;
+                    return;
+                }
                 Some(ClientChromeDrag::Tab { tab_id, .. }) => {
                     let insert_index = self.tab_drop_index_at(point);
                     let snap = self.snap_target_at(tab_id, point);
@@ -1272,6 +1289,11 @@ impl ClientShellState {
                 self.workspace_press = None;
                 self.tab_press = None;
                 match drag {
+                    ClientChromeDrag::PaneToTab {
+                        pane_id, dragging, ..
+                    } => {
+                        self.finish_pane_to_tab(pane_id, dragging, point, outcome);
+                    }
                     ClientChromeDrag::Tab {
                         tab_id,
                         workspace_id,
@@ -2155,6 +2177,28 @@ impl ClientShellState {
                     self.tab_press = Some(tab_press);
                     return;
                 }
+                if self.tab_snap_enabled() {
+                    let agent = self
+                        .hits
+                        .endpoint_agents
+                        .iter()
+                        .find(|(rect, endpoint, _)| {
+                            *endpoint == ClientEndpointId::Local && super::contains(*rect, point)
+                        })
+                        .map(|(_, _, id)| id.clone())
+                        .or_else(|| {
+                            self.hits
+                                .agents
+                                .iter()
+                                .find(|(rect, _)| super::contains(*rect, point))
+                                .map(|(_, id)| id.clone())
+                        });
+                    if let Some(pane_id) = agent {
+                        if self.start_pane_to_tab(pane_id, point) {
+                            return;
+                        }
+                    }
+                }
                 if self.handle_endpoint_agent_click(point, outcome) {
                     return;
                 }
@@ -2211,6 +2255,18 @@ impl ClientShellState {
                     }
                     return;
                 }
+                let pane_header = self.hits.panes.iter().find(|hit| {
+                    super::contains(hit.rect, point)
+                        && mouse.row == hit.rect.y
+                        && hit.inner_rect.y > hit.rect.y
+                        && mouse.column >= hit.rect.x.saturating_add(2)
+                        && mouse.column < hit.rect.x.saturating_add(12)
+                });
+                if let Some(hit) = pane_header {
+                    if self.start_pane_to_tab(hit.pane_id.clone(), point) {
+                        return;
+                    }
+                }
                 let split_hit = self
                     .hits
                     .pane_splits
@@ -2245,6 +2301,12 @@ impl ClientShellState {
                     .find(|hit| super::contains(hit.rect, point))
                     .cloned();
                 if let Some(hit) = pane_hit {
+                    if mouse.row == hit.rect.y
+                        && hit.inner_rect.y > hit.rect.y
+                        && self.start_pane_to_tab(hit.pane_id.clone(), point)
+                    {
+                        return;
+                    }
                     if hit.mouse_reporting && super::contains(hit.inner_rect, point) {
                         self.push_pane_mouse_event(&hit, mouse, mouse.modifiers, outcome);
                         self.pane_mouse_gesture = Some(ClientPaneMouseGesture {
