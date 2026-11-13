@@ -25,3 +25,7 @@ Keep official Herdr session-state scripts. Merge windows.json / ubuntu.json for 
 ## Usage
 
 Prefer supported native usage/status evidence. local_tools.py can read explicit native Codex JSONL logs without returning chat contents or reading credentials. Missing data stays unknown. Context size, cached input, and subscription allowance are distinct. Do not install a daemon, cookie reader, extra model summarizer, or Hermes merely to claim savings. Read skills/neptune/references/local-tools.md for compact checks and log pagination.
+
+## Keep the custom terminal UI in sync on Ubuntu or WSL
+
+Point your existing Neptune shortcut at `bash /absolute/path/to/neptune-setup/scripts/launch-neptune.sh` once. Then run `git pull` in that checkout and reopen Neptune. On launch, the script builds and caches the Herdr revision pinned by the checkout if it is missing. Later launches reuse the cached binary. The updater needs Rust via rustup, Zig 0.16.0, and the Herdr build prerequisites on the first build. Existing Neptune settings and session files stay in their usual locations. This launcher is for Ubuntu/WSL. Native Windows builds use a different executable.
