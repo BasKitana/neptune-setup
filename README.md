@@ -1,22 +1,31 @@
-# NEPTUNE v2
+# Neptune
 
-An update to the existing `neptune` launcher, not another agent framework. Open WezTerm -> NEPTUNE/Herdr -> use Codex or Claude directly. Delegate to visible workers only when useful.
+Neptune is a terminal workspace for coding with Codex and Claude. It brings project shells and coding agents into one WezTerm window using Herdr.
 
-- Compact worker/check output; full local diagnostic logs available on demand.
-- FirstMate is the task authority on supported hosts. No duplicate active NEPTUNE ledger.
-- Keep native session resume, isolated worktrees, meaningful verification, and recovery history.
-- Economical task-fit workers; the user's main AI model and effort stay unchanged.
-- Full local tool permissions are the requested default inside NEPTUNE, with native limits and explicit overrides preserved. This is not permission for spending or publishing.
-- CLI labels appear at startup. No mandatory Orchestrator role or delegation gate.
+[Watch the 20-second Neptune demo](docs/neptune-demo.mp4).
 
-Read START-HERE.md for installation/update. This repository contains source/config templates, not credentials, chats, binaries, or an automatic installer. Existing Windows runtime fixes must be preserved. FirstMate is not established as supported on this Windows host; do not install another OS to force it.
+## What you can do
 
-Offline verification:
+- Open a shell beside an agent using the **+** button in the pane tab strip.
+- Drag a tab to a pane edge to split the view, or drop it on a pane to stack it.
+- Switch terminals from the sidebar. Use **×** to close a terminal tab.
+- See agent activity and supported shell commands in the tab labels.
 
-```text
+## Get started
+
+1. Set up WezTerm and Herdr using [START-HERE.md](START-HERE.md).
+2. Open a terminal in your project directory and run `neptune`.
+3. Run `codex` or `claude` in a Neptune shell. Use your CLI's resume command to return to an existing conversation.
+
+The custom tab interface uses the Neptune Herdr build. On Ubuntu or WSL, use the [checkout launcher](docs/SETUP.md#keep-the-custom-terminal-ui-in-sync-on-ubuntu-or-wsl) to pick up the pinned build after a pull. For native Windows mouse input, see the [WezTerm ConPTY repair](docs/WINDOWS-MOUSE-FIX.md).
+
+## Development
+
+Run the offline checks from the repository root:
+
+```sh
 python -m unittest discover -s scripts/intelligence -p 'test_*.py'
 node scripts/intelligence/test_hook_entry.cjs
-python scripts/intelligence/benchmark_output.py
 ```
 
-Tests use disposable files and mocked workers. Output reduction is measurable; subscription savings and live worker behavior require separate native evidence. See docs/VERIFICATION.md.
+See [Verification](docs/VERIFICATION.md) for details.
