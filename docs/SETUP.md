@@ -6,6 +6,8 @@ Use the existing Windows WezTerm + PowerShell + Herdr installation. Preserve act
 
 If the Neptune sidebar ignores clicks, set `mouse_capture = true` under `[ui]` in your active Herdr config. On Windows, the Neptune profile uses `~/.config/herdr/config.toml`. Choose **Reload config** in Herdr's global menu to apply the change to the open client. In WezTerm, hold Shift while dragging to select text with the terminal.
 
+If moving the mouse types numbers or garbage into a PowerShell pane, install the verified Microsoft ConPTY runtime pair for WezTerm and update the launch shortcuts. Keep Herdr mouse capture enabled for tabs, splits, selection, and sidebar controls. Follow the [Windows mouse-input repair](WINDOWS-MOUSE-FIX.md).
+
 ## Task tracking and memory
 
 FirstMate is the only task authority on hosts where its upstream runtime is installed and supported. Require the actual FM_HOME and installed instructions; retain task IDs, briefs, inboxes, worktrees, and recovery/session references. A compact current brief contains goal, decisions, relevant files, verified check/revision, blocker, next action. Load history only when needed. NEPTUNE diagnostic artifacts track launches/output, not a parallel backlog.
