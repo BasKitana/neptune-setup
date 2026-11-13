@@ -258,6 +258,24 @@ pub(super) fn render_shell(
     mut state: ShellRenderState<'_>,
 ) -> ShellHitMap {
     let mut hits = ShellHitMap::default();
+    let pane_tabs = state.active_endpoint_id == &ClientEndpointId::Local
+        && std::env::var_os("NEPTUNE_SNAP_PREVIEW").is_some_and(|v| v == "1");
+    let mut layout = layout;
+    let project_tabs = snapshot
+        .panes
+        .iter()
+        .filter(|pane| Some(pane.workspace_id.as_str()) == snapshot.focused_workspace_id.as_deref())
+        .collect::<Vec<_>>();
+    let tab_rows = ((project_tabs.len() + 3) as u16).min(layout.sidebar.height / 2);
+    let tab_list = Rect::new(
+        layout.sidebar.x,
+        layout.sidebar.bottom().saturating_sub(tab_rows),
+        layout.sidebar.width,
+        tab_rows,
+    );
+    if pane_tabs && layout.sidebar.width > 4 {
+        layout.sidebar.height = layout.sidebar.height.saturating_sub(tab_rows);
+    }
     if layout.mobile_header.height > 0 {
         super::mobile::render_mobile_header(
             buffer,
@@ -309,7 +327,79 @@ pub(super) fn render_shell(
             );
         }
     }
-    if layout.tab_bar.height > 0 {
+    if pane_tabs && tab_list.width > 4 {
+        let palette = &config.palette;
+        put_text(
+            buffer,
+            tab_list.x + 1,
+            tab_list.y,
+            tab_list.width - 2,
+            "tabs",
+            Style::default().fg(palette.overlay0),
+        );
+        let capacity = tab_rows.saturating_sub(3).max(1) as usize;
+        let max_scroll = project_tabs.len().saturating_sub(capacity);
+        *state.tab_scroll = (*state.tab_scroll).min(max_scroll);
+        if *state.reveal_focused_tab {
+            if let Some(index) = project_tabs.iter().position(|tab| tab.focused) {
+                if index < *state.tab_scroll || index >= *state.tab_scroll + capacity {
+                    *state.tab_scroll = index.saturating_sub(capacity / 2).min(max_scroll);
+                }
+            }
+            *state.reveal_focused_tab = false;
+        }
+        for (index, tab) in project_tabs
+            .iter()
+            .skip(*state.tab_scroll)
+            .take(capacity)
+            .enumerate()
+        {
+            let area = Rect::new(
+                tab_list.x + 1,
+                tab_list.y + 1 + index as u16,
+                tab_list.width - 2,
+                1,
+            );
+            let style = Style::default()
+                .fg(if tab.focused {
+                    palette.accent
+                } else {
+                    palette.text
+                })
+                .bg(if tab.focused {
+                    palette.surface0
+                } else {
+                    palette.panel_bg
+                });
+            buffer.set_style(area, style);
+            let label =
+                super::snap::pane_tab_label(snapshot, &tab.pane_id, snapshot.numbered_panes, false);
+            put_text(buffer, area.x, area.y, area.width, &label, style);
+            hits.sidebar_terminal_tabs.push((area, tab.pane_id.clone()));
+        }
+        if max_scroll > 0 {
+            let y = tab_list.bottom() - 2;
+            hits.tab_scroll_left = Rect::new(tab_list.x + 1, y, 3, 1);
+            hits.tab_scroll_right = Rect::new(tab_list.x + 5, y, 3, 1);
+            put_text(
+                buffer,
+                tab_list.x + 1,
+                y,
+                8,
+                " <   > ",
+                Style::default().fg(palette.accent),
+            );
+        }
+        hits.new_tab = Rect::new(tab_list.x + 1, tab_list.bottom() - 1, tab_list.width - 2, 1);
+        put_text(
+            buffer,
+            hits.new_tab.x,
+            hits.new_tab.y,
+            hits.new_tab.width,
+            "+ new tab",
+            Style::default().fg(palette.overlay0),
+        );
+    } else if layout.tab_bar.height > 0 {
         render_tab_bar(
             buffer,
             layout.tab_bar,

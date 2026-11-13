@@ -17,6 +17,8 @@ pub enum PaneRightClickTarget {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PaneSplitParams {
+    #[serde(default)]
+    pub stack: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -693,6 +695,13 @@ pub struct PaneLinkRegion {
     pub row: u16,
     pub start_col: u16,
     pub end_col: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneDockParams {
+    pub source_pane_id: String,
+    pub target_pane_id: String,
+    pub edge: PaneDirection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]

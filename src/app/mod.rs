@@ -104,6 +104,9 @@ impl AppPolicy {
 
 pub struct App {
     pub state: AppState,
+    pub(crate) terminal_display_numbers: std::cell::RefCell<
+        std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>>,
+    >,
     pub(crate) pixel_mouse_available: bool,
     pub(crate) terminal_runtimes: crate::terminal::TerminalRuntimeRegistry,
     pub event_tx: mpsc::Sender<AppEvent>,
@@ -624,6 +627,7 @@ impl App {
             state,
             pixel_mouse_available: false,
             terminal_runtimes: restored_terminal_runtimes,
+            terminal_display_numbers: Default::default(),
             event_tx,
             event_rx,
             last_git_remote_status_refresh: Instant::now() - GIT_REMOTE_STATUS_REFRESH_INTERVAL,
@@ -2744,6 +2748,7 @@ mod tests {
         let response = app.handle_api_request(crate::api::schema::Request {
             id: "req_pane_split_focus_background_tab".into(),
             method: crate::api::schema::Method::PaneSplit(crate::api::schema::PaneSplitParams {
+                stack: false,
                 workspace_id: None,
                 target_pane_id: Some(target_pane_id),
                 direction: crate::api::schema::SplitDirection::Right,
@@ -2791,6 +2796,7 @@ mod tests {
         let response = app.handle_api_request(crate::api::schema::Request {
             id: "req_pane_split_ratio".into(),
             method: crate::api::schema::Method::PaneSplit(crate::api::schema::PaneSplitParams {
+                stack: false,
                 workspace_id: None,
                 target_pane_id: Some(target_pane_id),
                 direction: crate::api::schema::SplitDirection::Right,
@@ -2881,6 +2887,7 @@ mod tests {
                 id: "req_hidden_split_size".into(),
                 method: crate::api::schema::Method::PaneSplit(
                     crate::api::schema::PaneSplitParams {
+                        stack: false,
                         workspace_id: None,
                         target_pane_id: Some(app.pane_info(ws_idx, root).unwrap().pane_id),
                         direction: crate::api::schema::SplitDirection::Down,
@@ -2923,6 +2930,7 @@ mod tests {
         let response = app.handle_api_request(crate::api::schema::Request {
             id: "req_pane_split_current".into(),
             method: crate::api::schema::Method::PaneSplit(crate::api::schema::PaneSplitParams {
+                stack: false,
                 workspace_id: None,
                 target_pane_id: None,
                 direction: crate::api::schema::SplitDirection::Right,

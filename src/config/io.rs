@@ -20,7 +20,7 @@ const KNOWN_TOP_LEVEL_CONFIG_KEYS: &[&str] = &[
 ];
 
 pub fn app_dir_name() -> &'static str {
-    if cfg!(debug_assertions) {
+    if cfg!(debug_assertions) && option_env!("NEPTUNE_INSTALLED_BUILD").is_none() {
         "herdr-dev"
     } else {
         "herdr"

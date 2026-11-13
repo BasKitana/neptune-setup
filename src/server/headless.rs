@@ -1440,7 +1440,8 @@ impl HeadlessServer {
             self.sync_window_title();
         }
         (
-            self.app.terminal_title_sidebar_changed(&changes),
+            self.app.terminal_title_sidebar_changed(&changes)
+                || (!sources.is_empty() && std::env::var_os("NEPTUNE_SNAP_PREVIEW").is_some()),
             outer_title_synced,
         )
     }

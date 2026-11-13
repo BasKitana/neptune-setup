@@ -28,6 +28,9 @@ pub(super) fn snapshot() -> ClientShellSnapshot {
         agent_view_label: None,
         agent_order: Vec::new(),
         pane_stacks: Default::default(),
+        pane_activity: Default::default(),
+        numbered_panes: false,
+        terminal_numbers: Default::default(),
         workspaces: vec![ClientShellWorkspace {
             workspace_id: "ws_1".into(),
             active_tab_id: "tab_1".into(),

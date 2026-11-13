@@ -1113,6 +1113,7 @@ impl App {
             Method::TabMove(params) => return self.handle_tab_move(request.id, params),
             Method::TabSnap(params) => return self.handle_tab_snap(request.id, params),
             Method::PaneStack(params) => return self.handle_pane_stack(request.id, params),
+            Method::PaneDock(params) => return self.handle_pane_dock(request.id, params),
             Method::TabClose(target) => return self.handle_tab_close(request.id, target),
             Method::AgentList(_) => return self.handle_agent_list(request.id),
             Method::AgentGet(target) => return self.handle_agent_get(request.id, target),

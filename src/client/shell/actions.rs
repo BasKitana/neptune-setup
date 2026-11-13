@@ -132,6 +132,16 @@ impl ClientShellState {
                     }
                     return;
                 }
+                if action == crate::input::KeybindAction::NewTab && self.tab_snap_enabled() {
+                    if let Some(id) = self
+                        .snapshot
+                        .as_ref()
+                        .and_then(|s| s.focused_pane_id.clone())
+                    {
+                        self.add_terminal_tab(Some(id), outcome);
+                        return;
+                    }
+                }
                 if action == crate::input::KeybindAction::NewTab && self.config.prompt_new_tab_name
                 {
                     self.open_new_tab_overlay();
@@ -1047,6 +1057,7 @@ impl ClientShellState {
             })),
             KeybindAction::SplitVertical | KeybindAction::SplitHorizontal => {
                 Some(Method::PaneSplit(PaneSplitParams {
+                    stack: false,
                     workspace_id: Some(focused_workspace),
                     target_pane_id: focused_pane,
                     direction: if action == KeybindAction::SplitVertical {

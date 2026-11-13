@@ -468,6 +468,12 @@ impl ClientShellState {
                     .map(|index| (index, *rect))
             })
             .collect::<Vec<_>>();
+        if let Some((index, _)) = visible
+            .iter()
+            .find(|(_, rect)| super::contains(*rect, point))
+        {
+            return Some(*index);
+        }
         let (first_index, first_rect) = *visible.first()?;
         let (last_index, last_rect) = *visible.last()?;
         let on_tab_row = point.1 == first_rect.y;
@@ -1200,9 +1206,8 @@ impl ClientShellState {
                 }) => {
                     let dragging = *dragging || *start != point;
                     let over_tab_bar = dragging && self.pane_to_tab_drop_at(point);
-                    let stack_preview = if dragging && !over_tab_bar {
-                        self.pane_stack_target_at(pane_id, point)
-                            .map(|(_, rect)| rect)
+                    let mut stack_preview = if dragging && !over_tab_bar {
+                        self.pane_drop_preview_at(pane_id, point)
                     } else {
                         None
                     };
@@ -1215,14 +1220,25 @@ impl ClientShellState {
                     {
                         *current_dragging = dragging;
                         *current_target = over_tab_bar;
-                        *current_stack_preview = stack_preview;
+                        if !current_stack_preview
+                            .as_ref()
+                            .zip(stack_preview.as_ref())
+                            .is_some_and(|(old, new)| old.matches(new))
+                        {
+                            if let (Some(old), Some(new)) =
+                                (current_stack_preview.as_ref(), stack_preview.as_mut())
+                            {
+                                new.transition_from(old);
+                            }
+                            *current_stack_preview = stack_preview;
+                        }
                     }
                     outcome.repaint = true;
                     return;
                 }
                 Some(ClientChromeDrag::Tab { tab_id, .. }) => {
                     let insert_index = self.tab_drop_index_at(point);
-                    let snap = self.snap_target_at(tab_id, point);
+                    let mut snap = self.snap_target_at(tab_id, point);
                     if let Some(ClientChromeDrag::Tab {
                         insert_index: current,
                         snap: current_snap,
@@ -1235,6 +1251,9 @@ impl ClientShellState {
                             .zip(snap.as_ref())
                             .is_some_and(|(old, new)| old.matches(new))
                         {
+                            if let (Some(old), Some(new)) = (current_snap.as_ref(), snap.as_mut()) {
+                                new.transition_from(old);
+                            }
                             *current_snap = snap;
                         }
                     }
@@ -2103,6 +2122,15 @@ impl ClientShellState {
                     return;
                 }
                 if super::contains(self.hits.new_tab, point) {
+                    if self.tab_snap_enabled() {
+                        self.add_terminal_tab(
+                            self.snapshot
+                                .as_ref()
+                                .and_then(|s| s.focused_pane_id.clone()),
+                            outcome,
+                        );
+                        return;
+                    }
                     self.record_binding(
                         crate::input::KeybindMatch::Action(crate::input::KeybindAction::NewTab),
                         outcome,
@@ -2115,24 +2143,22 @@ impl ClientShellState {
                     return;
                 }
                 if super::contains(self.hits.tab_scroll_right, point) {
-                    let tab_count = self
-                        .snapshot
-                        .as_deref()
-                        .and_then(|snapshot| {
-                            snapshot.focused_workspace_id.as_deref().map(|id| {
-                                snapshot
-                                    .tabs
-                                    .iter()
-                                    .filter(|tab| tab.workspace_id == id)
-                                    .count()
-                            })
-                        })
-                        .unwrap_or(0);
-                    self.tab_scroll = self
-                        .tab_scroll
-                        .saturating_add(1)
-                        .min(tab_count.saturating_sub(1));
+                    self.tab_scroll = self.tab_scroll.saturating_add(1);
                     outcome.repaint = true;
+                    return;
+                }
+                if let Some((_, pane_id)) = self
+                    .hits
+                    .sidebar_terminal_tabs
+                    .iter()
+                    .find(|(rect, _)| super::contains(*rect, point))
+                {
+                    self.push_endpoint_method(
+                        crate::api::schema::Method::PaneFocus(crate::api::schema::PaneTarget {
+                            pane_id: pane_id.clone(),
+                        }),
+                        outcome,
+                    );
                     return;
                 }
                 let group_toggle = self.hits.workspaces.iter().find_map(|hit| {
@@ -2264,6 +2290,24 @@ impl ClientShellState {
                     {
                         self.push_pane_scroll_offset(hit.pane_id, offset, outcome);
                     }
+                    return;
+                }
+                if let Some((_, id)) = self
+                    .hits
+                    .stack_add
+                    .iter()
+                    .find(|(rect, _)| super::contains(*rect, point))
+                {
+                    self.add_terminal_tab(Some(id.clone()), outcome);
+                    return;
+                }
+                if let Some((_, pane_id)) = self
+                    .hits
+                    .stack_close
+                    .iter()
+                    .find(|(rect, _)| super::contains(*rect, point))
+                {
+                    self.request_pane_close(pane_id.clone(), outcome);
                     return;
                 }
                 let stack_tab = self

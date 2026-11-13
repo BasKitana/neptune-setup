@@ -109,11 +109,22 @@ pub struct EndpointServerWelcome {
 pub fn snapshot_message(snapshot: &ClientShellSnapshot) -> serde_json::Result<ServerMessage> {
     Ok(ServerMessage::EndpointControl {
         kind: ENDPOINT_SNAPSHOT_KIND.into(),
-        data: if snapshot.pane_stacks.is_empty() {
+        data: if snapshot.pane_stacks.is_empty()
+            && snapshot.pane_activity.is_empty()
+            && !snapshot.numbered_panes
+            && snapshot.terminal_numbers.is_empty()
+        {
             serde_json::to_string(snapshot)?
         } else {
             let mut data = serde_json::to_value(snapshot)?;
+            data["terminal_numbers"] = serde_json::to_value(&snapshot.terminal_numbers)?;
             data["pane_stacks"] = serde_json::to_value(&snapshot.pane_stacks)?;
+            if !snapshot.pane_activity.is_empty() {
+                data["pane_activity"] = serde_json::to_value(&snapshot.pane_activity)?;
+            }
+            if snapshot.numbered_panes {
+                data["numbered_panes"] = true.into();
+            }
             serde_json::to_string(&data)?
         },
     })
@@ -249,6 +260,9 @@ mod tests {
             agent_view_label: None,
             agent_order: Vec::new(),
             pane_stacks: Default::default(),
+            pane_activity: Default::default(),
+            numbered_panes: false,
+            terminal_numbers: Default::default(),
             workspaces: Vec::new(),
             tabs: Vec::new(),
             panes: Vec::new(),

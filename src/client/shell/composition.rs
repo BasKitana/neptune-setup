@@ -208,6 +208,7 @@ impl ClientShellState {
             _ => (None, None),
         };
         let mut buffer = Buffer::empty(Rect::new(0, 0, cols, rows));
+        let sidebar_collapsed = self.sidebar_collapsed && !self.tab_snap_enabled();
         self.hits = render::render_shell(
             &mut buffer,
             layout,
@@ -225,7 +226,7 @@ impl ClientShellState {
                 tab_scroll: &mut self.tab_scroll,
                 reveal_focused_workspace: &mut self.reveal_focused_workspace,
                 reveal_focused_tab: &mut self.reveal_focused_tab,
-                sidebar_collapsed: self.sidebar_collapsed,
+                sidebar_collapsed,
                 sidebar_section_split: self.sidebar_section_split,
                 tab_drag_insert_index,
                 selected_workspace_id: self
@@ -347,12 +348,16 @@ impl ClientShellState {
             frame.cells[start..start + usize::from(bar.width)].to_vec()
         });
         blit_pane_surface(&mut frame, &surface.frame, layout.pane_surface);
-        self.hits.stack_tabs = super::snap::draw_stack_tabs(
-            &mut frame,
-            snapshot,
-            &self.hits.panes,
-            &self.config.palette,
-        );
+        if self.tab_snap_enabled() {
+            (self.hits.stack_tabs, self.hits.stack_add) = super::snap::draw_stack_tabs(
+                &mut frame,
+                snapshot,
+                &self.hits.panes,
+                &self.config.palette,
+                layout.tab_bar,
+                &mut self.hits.stack_close,
+            );
+        }
         if self.overlay.is_none() && self.hits.popup.is_none() {
             self.draw_snap_preview(&mut frame);
         }

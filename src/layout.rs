@@ -147,6 +147,35 @@ impl TileLayout {
         true
     }
 
+    /// Reposition only the layout leaf; the terminal runtime and identity stay owned by the tab.
+    pub(crate) fn dock_pane(
+        &mut self,
+        source: PaneId,
+        target: PaneId,
+        edge: crate::api::schema::PaneDirection,
+    ) -> bool {
+        if source == target
+            || !self.pane_ids().contains(&source)
+            || !self.pane_ids().contains(&target)
+        {
+            return false;
+        }
+        if !self.close_pane(source) {
+            return false;
+        }
+        self.snap_near(
+            target,
+            Self {
+                root: Node::Pane(source),
+                focus: source,
+                prev_focus: None,
+            },
+            edge,
+        );
+        self.set_focus(source);
+        true
+    }
+
     pub(crate) fn stacks(&self) -> Vec<(PaneId, &[PaneId])> {
         fn collect<'a>(node: &'a Node, stacks: &mut Vec<(PaneId, &'a [PaneId])>) {
             match node {
@@ -828,6 +857,33 @@ fn split_rect(area: Rect, direction: Direction, ratio: f32) -> (Rect, Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dock_extracts_active_and_hidden_members_without_changing_ids() {
+        use crate::api::schema::PaneDirection::*;
+        for edge in [Left, Right, Up, Down] {
+            for active_source in [true, false] {
+                let (mut layout, a) = TileLayout::new();
+                let b = layout.split_focused(Direction::Horizontal);
+                let c = layout.split_focused(Direction::Horizontal);
+                assert!(layout.stack_pane(b, a));
+                assert!(layout.stack_pane(c, a));
+                if active_source {
+                    layout.focus_pane(b);
+                }
+                let before = layout.pane_ids();
+                assert!(layout.dock_pane(b, a, edge));
+                assert_eq!(layout.pane_count(), 3);
+                assert!(before.iter().all(|id| layout.pane_ids().contains(id)));
+                assert_eq!(layout.focused(), b);
+                assert_eq!(layout.panes(Rect::new(0, 0, 100, 30)).len(), 2);
+                assert!(!layout.dock_pane(a, a, edge));
+                assert!(!layout.dock_pane(PaneId::from_raw(0), a, edge));
+                assert!(layout.stack_pane(b, a));
+                assert_eq!(layout.panes(Rect::new(0, 0, 100, 30)).len(), 1);
+            }
+        }
+    }
 
     #[test]
     fn pane_stack_changes_geometry_and_focus_without_losing_members() {

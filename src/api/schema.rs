@@ -253,6 +253,8 @@ pub enum Method {
     TabSnap(TabSnapParams),
     #[serde(rename = "pane.stack")]
     PaneStack(PaneStackParams),
+    #[serde(rename = "pane.dock")]
+    PaneDock(PaneDockParams),
 }
 
 #[cfg(test)]

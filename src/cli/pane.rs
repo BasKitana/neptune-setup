@@ -728,6 +728,7 @@ fn parse_pane_split_args(
     };
 
     Ok(PaneSplitParams {
+        stack: false,
         workspace_id: None,
         target_pane_id: pane_id,
         direction,

@@ -911,6 +911,13 @@ where
     })
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PaneActivity {
+    pub running: Option<String>,
+    pub last_result: Option<String>,
+    pub branch: Option<String>,
+}
+
 /// Initial resource projection used by the stable client-owned shell.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientShellSnapshot {
@@ -946,6 +953,12 @@ pub struct ClientShellSnapshot {
     // Named JSON endpoint metadata. Leave the legacy bincode payload unchanged.
     #[serde(skip)]
     pub pane_stacks: std::collections::BTreeMap<String, Vec<String>>,
+    #[serde(skip)]
+    pub pane_activity: std::collections::BTreeMap<String, PaneActivity>,
+    #[serde(skip)]
+    pub numbered_panes: bool,
+    #[serde(skip)]
+    pub terminal_numbers: std::collections::BTreeMap<String, usize>,
     pub workspaces: Vec<ClientShellWorkspace>,
     pub tabs: Vec<ClientShellTab>,
     pub panes: Vec<ClientShellPane>,
@@ -2821,6 +2834,9 @@ mod tests {
             agent_view_label: None,
             agent_order: Vec::new(),
             pane_stacks: Default::default(),
+            pane_activity: Default::default(),
+            numbered_panes: false,
+            terminal_numbers: Default::default(),
             workspaces: vec![ClientShellWorkspace {
                 workspace_id: "w1".into(),
                 active_tab_id: "w1:t1".into(),

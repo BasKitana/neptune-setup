@@ -22,6 +22,7 @@ const CLIENT_SHELL_METHODS: &[&str] = &[
     "pane.close",
     "pane.copy_motion",
     "pane.copy_search",
+    "pane.dock",
     "pane.edit_scrollback",
     "pane.focus",
     "pane.focus_direction",
@@ -315,6 +316,10 @@ mod tests {
             Some("16bbff0328690068a56a8dd65be87d9edc20967da8848118a5f877f768e5eefa")
         );
 
+        assert_eq!(
+            actual.remove("pane.dock").as_deref(),
+            Some("8d9e20eb6abf99c7740232f61bb1ee6180a71de12c337de1693305893f3262a4")
+        );
         assert_eq!(
             actual, expected,
             "an existing endpoint method changed shape; add load-bearing behavior as a new advertised method or explicitly gate new fields"

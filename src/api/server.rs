@@ -639,6 +639,7 @@ pub(crate) fn api_method_name(method: &Method) -> &'static str {
         Method::TabMove(_) => "tab.move",
         Method::TabSnap(_) => "tab.snap",
         Method::PaneStack(_) => "pane.stack",
+        Method::PaneDock(_) => "pane.dock",
         Method::TabClose(_) => "tab.close",
         Method::AgentList(_) => "agent.list",
         Method::AgentGet(_) => "agent.get",

@@ -111,6 +111,14 @@ impl App {
             Some(Err(err)) => return encode_error(id, "pane_split_failed", err.to_string()),
             None => return encode_error(id, "pane_not_found", "pane not found"),
         };
+        if params.stack {
+            let layout = &mut self.state.workspaces[ws_idx].tabs[target_tab_idx].layout;
+            let stacked = layout.stack_pane(new_pane.pane_id, target_pane_id);
+            debug_assert!(stacked);
+            if params.focus {
+                layout.focus_pane(new_pane.pane_id);
+            }
+        }
         if let Some(pane) = self.state.workspaces[ws_idx].pane_state_mut(new_pane.pane_id) {
             pane.right_click_passthrough = matches!(
                 params.right_click,
@@ -942,6 +950,36 @@ impl App {
                 },
             },
         )
+    }
+
+    pub(super) fn handle_pane_dock(
+        &mut self,
+        id: String,
+        params: crate::api::schema::PaneDockParams,
+    ) -> String {
+        let Some((workspace, source)) = self.parse_pane_id(&params.source_pane_id) else {
+            return encode_error(id, "pane_not_found", "dock source pane not found");
+        };
+        let Some((target_workspace, target)) = self.parse_pane_id(&params.target_pane_id) else {
+            return encode_error(id, "pane_not_found", "dock target pane not found");
+        };
+        let ws = &mut self.state.workspaces[workspace];
+        let source_tab = ws.find_tab_index_for_pane(source);
+        let target_tab = ws.find_tab_index_for_pane(target);
+        if workspace != target_workspace
+            || source_tab != target_tab
+            || !target_tab
+                .and_then(|index| ws.tabs.get_mut(index))
+                .is_some_and(|tab| !tab.zoomed && tab.layout.dock_pane(source, target, params.edge))
+        {
+            return encode_error(
+                id,
+                "pane_dock_failed",
+                "dock requires distinct panes in the same unzoomed tab",
+            );
+        }
+        self.schedule_session_save();
+        encode_success(id, ResponseResult::Ok {})
     }
 
     pub(super) fn handle_pane_stack(

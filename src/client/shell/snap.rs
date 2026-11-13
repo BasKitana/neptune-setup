@@ -10,9 +10,68 @@ pub(super) struct SnapTarget {
     pub(super) animation: super::snap_animation::SnapAnimation,
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct PaneDropPreview {
+    target: String,
+    edge: Option<PaneDirection>,
+    rect: Rect,
+    pub(super) animation: super::snap_animation::SnapAnimation,
+}
+
+impl ClientShellState {
+    pub(super) fn add_terminal_tab(
+        &mut self,
+        target_pane_id: Option<String>,
+        outcome: &mut ClientShellInput,
+    ) {
+        use crate::api::schema::{PaneSplitParams, SplitDirection};
+        if target_pane_id.is_some() {
+            self.push_endpoint_method(
+                Method::PaneSplit(PaneSplitParams {
+                    stack: true,
+                    target_pane_id,
+                    workspace_id: None,
+                    direction: SplitDirection::Right,
+                    ratio: None,
+                    cwd: None,
+                    focus: true,
+                    right_click: Default::default(),
+                    env: Default::default(),
+                }),
+                outcome,
+            );
+        }
+    }
+}
+
+impl PaneDropPreview {
+    pub(super) fn matches(&self, other: &Self) -> bool {
+        self.target == other.target && self.edge == other.edge && self.rect == other.rect
+    }
+
+    fn region(&self, now: std::time::Instant) -> Rect {
+        self.animation
+            .region(self.rect, self.edge.unwrap_or(PaneDirection::Down), now)
+    }
+
+    pub(super) fn transition_from(&mut self, old: &Self) {
+        self.animation = super::snap_animation::SnapAnimation::from_region(
+            old.region(std::time::Instant::now()),
+        );
+    }
+}
+
 impl SnapTarget {
     pub(super) fn matches(&self, other: &Self) -> bool {
         self.pane_id == other.pane_id && self.edge == other.edge && self.preview == other.preview
+    }
+
+    pub(super) fn transition_from(&mut self, old: &Self) {
+        self.animation = super::snap_animation::SnapAnimation::from_region(old.animation.region(
+            old.preview,
+            old.edge,
+            std::time::Instant::now(),
+        ));
     }
 
     pub(super) fn request(self, source_tab_id: String) -> Method {
@@ -78,11 +137,20 @@ impl ClientShellState {
 
     pub(super) fn draw_snap_preview(&self, frame: &mut FrameData) {
         if let Some(ClientChromeDrag::PaneToTab {
-            stack_preview: Some(rect),
+            stack_preview: Some(preview),
             ..
         }) = &self.chrome_drag
         {
-            draw_outline(frame, *rect, self.config.palette.accent);
+            draw_drop_preview(
+                frame,
+                preview.region(std::time::Instant::now()),
+                &self.config.palette,
+                if preview.edge.is_some() {
+                    " Split "
+                } else {
+                    " Join tabs "
+                },
+            );
             return;
         }
         let Some(ClientChromeDrag::Tab {
@@ -94,7 +162,7 @@ impl ClientShellState {
         let preview = snap
             .animation
             .region(snap.preview, snap.edge, std::time::Instant::now());
-        draw_outline(frame, preview, self.config.palette.accent);
+        draw_drop_preview(frame, preview, &self.config.palette, " Split ");
     }
 }
 
@@ -142,25 +210,65 @@ fn snap_region(area: Rect, point: (u16, u16)) -> Option<(PaneDirection, Rect)> {
     Some((edge, preview))
 }
 
-fn draw_outline(frame: &mut FrameData, area: Rect, accent: Color) {
-    let mut cell = ratatui::buffer::Cell::default();
-    cell.set_bg(accent);
-    let bg = crate::protocol::CellData::from_ratatui_cell(&cell).bg;
-    let width = usize::from(frame.width);
+fn draw_drop_preview(frame: &mut FrameData, area: Rect, palette: &Palette, label: &str) {
     let area = area.intersection(Rect::new(0, 0, frame.width, frame.height));
     if area.is_empty() {
         return;
     }
-    for y in [area.y, area.bottom() - 1] {
-        let start = usize::from(y) * width + usize::from(area.x);
-        for cell in &mut frame.cells[start..start + usize::from(area.width)] {
-            cell.bg = bg;
+    let Color::Rgb(r, g, b) = palette.accent else {
+        return;
+    };
+    let tint = |base: u32| {
+        let base = if base >> 24 == 2 { base } else { 0x020f141e };
+        let blend =
+            |shift: u32, accent: u8| (((base >> shift) & 255u32) * 4 + u32::from(accent)) / 5;
+        0x02000000 | (blend(16, r) << 16) | (blend(8, g) << 8) | blend(0, b)
+    };
+    let width = usize::from(frame.width);
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let cell = &mut frame.cells[usize::from(y) * width + usize::from(x)];
+            cell.bg = tint(cell.bg);
         }
     }
-    for y in area.y + 1..area.bottom() - 1 {
-        let start = usize::from(y) * width;
-        frame.cells[start + usize::from(area.x)].bg = bg;
-        frame.cells[start + usize::from(area.right() - 1)].bg = bg;
+    let mut buffer = Buffer::empty(area);
+    let style = Style::default()
+        .fg(palette.accent)
+        .bg(Color::Rgb(r / 5, g / 5, b / 5));
+    use ratatui::widgets::{Block, BorderType, Borders, Widget};
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(style)
+        .render(area, &mut buffer);
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if x == area.x || x + 1 == area.right() || y == area.y || y + 1 == area.bottom() {
+                frame.cells[usize::from(y) * width + usize::from(x)] =
+                    crate::protocol::CellData::from_ratatui_cell(&buffer[(x, y)]);
+            }
+        }
+    }
+    if area.width >= label.len() as u16 + 2 && area.height >= 3 {
+        let text = Rect::new(
+            area.x + (area.width - label.len() as u16) / 2,
+            area.y + area.height / 2,
+            label.len() as u16,
+            1,
+        );
+        let mut buffer = Buffer::empty(text);
+        render::put_text(
+            &mut buffer,
+            text.x,
+            text.y,
+            text.width,
+            label,
+            Style::default().fg(palette.panel_bg).bg(palette.accent),
+        );
+        for x in text.x..text.right() {
+            frame.cells[usize::from(text.y) * width + usize::from(x)] =
+                crate::protocol::CellData::from_ratatui_cell(&buffer[(x, text.y)]);
+        }
     }
 }
 
@@ -229,14 +337,19 @@ impl ClientShellState {
     }
 
     pub(super) fn pane_to_tab_drop_at(&self, point: (u16, u16)) -> bool {
-        contains(self.hits.new_tab, point) || self.tab_drop_index_at(point).is_some()
+        !self
+            .hits
+            .stack_tabs
+            .iter()
+            .any(|(rect, _)| contains(*rect, point))
+            && (contains(self.hits.new_tab, point) || self.tab_drop_index_at(point).is_some())
     }
 
-    pub(super) fn pane_stack_target_at(
+    pub(super) fn pane_drop_preview_at(
         &self,
         source: &str,
         point: (u16, u16),
-    ) -> Option<(&str, Rect)> {
+    ) -> Option<PaneDropPreview> {
         let pane = self.detachable_pane(source)?;
         let snapshot = self.snapshot.as_ref()?;
         if snapshot.focused_tab_id.as_deref() != Some(&pane.tab_id)
@@ -244,21 +357,47 @@ impl ClientShellState {
         {
             return None;
         }
-        let hit = self
+        let header_member = self
             .hits
-            .panes
+            .stack_tabs
             .iter()
-            .find(|hit| contains(hit.inner_rect, point))?;
-        if hit.pane_id == source
-            || snapshot
-                .pane_stacks
-                .get(&hit.pane_id)
-                .is_some_and(|members| members.iter().any(|id| id == source))
-            || snap_region(hit.rect, point).is_some()
-        {
+            .find(|(rect, _)| contains(*rect, point))
+            .map(|(_, id)| id);
+        let hit = self.hits.panes.iter().find(|hit| {
+            contains(hit.rect, point)
+                || header_member.is_some_and(|id| {
+                    id == &hit.pane_id
+                        || snapshot
+                            .pane_stacks
+                            .get(&hit.pane_id)
+                            .is_some_and(|members| members.contains(id))
+                })
+        })?;
+        let members = snapshot.pane_stacks.get(&hit.pane_id);
+        let same_group =
+            hit.pane_id == source || members.is_some_and(|ids| ids.iter().any(|id| id == source));
+        let header =
+            header_member.is_some() || (point.1 == hit.rect.y && hit.inner_rect.y > hit.rect.y);
+        let split = if header {
+            None
+        } else {
+            snap_region(hit.rect, point)
+        };
+        if same_group && (split.is_none() || members.is_none_or(|ids| ids.len() < 2)) {
             return None;
         }
-        Some((&hit.pane_id, hit.rect))
+        let target = if hit.pane_id == source {
+            members?.iter().find(|id| id.as_str() != source)?.clone()
+        } else {
+            hit.pane_id.clone()
+        };
+        let (edge, rect) = split.map_or((None, hit.rect), |(edge, rect)| (Some(edge), rect));
+        Some(PaneDropPreview {
+            target,
+            edge,
+            rect,
+            animation: super::snap_animation::SnapAnimation::new(),
+        })
     }
 
     pub(super) fn finish_pane_to_tab(
@@ -271,14 +410,20 @@ impl ClientShellState {
         use crate::api::schema::{PaneMoveDestination, PaneMoveParams, PaneTarget};
         if !dragging {
             self.push_endpoint_method(Method::PaneFocus(PaneTarget { pane_id }), outcome);
-        } else if let Some((target, _)) = self.pane_stack_target_at(&pane_id, point) {
-            self.push_endpoint_method(
+        } else if let Some(preview) = self.pane_drop_preview_at(&pane_id, point) {
+            let method = if let Some(edge) = preview.edge {
+                Method::PaneDock(crate::api::schema::PaneDockParams {
+                    source_pane_id: pane_id,
+                    target_pane_id: preview.target,
+                    edge,
+                })
+            } else {
                 Method::PaneStack(crate::api::schema::PaneStackParams {
                     source_pane_id: pane_id,
-                    target_pane_id: target.to_owned(),
-                }),
-                outcome,
-            );
+                    target_pane_id: preview.target,
+                })
+            };
+            self.push_endpoint_method(method, outcome);
         } else if self.pane_to_tab_drop_at(point) {
             if let Some(pane) = self.detachable_pane(&pane_id) {
                 let destination = PaneMoveDestination::NewTab {
@@ -299,51 +444,152 @@ impl ClientShellState {
     }
 }
 
+pub(super) fn pane_tab_label(
+    snapshot: &ClientShellSnapshot,
+    id: &str,
+    multiple: bool,
+    branches_differ: bool,
+) -> String {
+    use crate::api::schema::AgentStatus;
+    let activity = snapshot.pane_activity.get(id);
+    let agent = snapshot.agents.iter().find(|agent| agent.pane_id == id);
+    let number = snapshot.terminal_numbers.get(id).copied();
+    let mut label = if let Some(agent) = agent {
+        let name = agent
+            .display_agent
+            .as_deref()
+            .or(agent.agent.as_deref())
+            .unwrap_or("Agent");
+        let name = if name.eq_ignore_ascii_case("codex") {
+            "Codex"
+        } else {
+            name
+        };
+        let title = agent
+            .title
+            .as_deref()
+            .or(agent.terminal_title_stripped.as_deref())
+            .map(str::trim)
+            .filter(|title| {
+                !title.is_empty()
+                    && !title.eq_ignore_ascii_case(name)
+                    && !snapshot
+                        .panes
+                        .iter()
+                        .find(|pane| pane.pane_id == id)
+                        .is_some_and(|pane| {
+                            [pane.cwd.as_deref(), pane.foreground_cwd.as_deref()]
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|cwd| {
+                                    cwd.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next()
+                                })
+                                .any(|folder| title.eq_ignore_ascii_case(folder))
+                        })
+                    && !title
+                        .split_once(':')
+                        .is_some_and(|(prefix, _)| prefix.contains('@'))
+                    && !title.contains(":/")
+                    && !title.contains(": ~")
+                    && !title.starts_with('/')
+                    && !title.starts_with('~')
+            });
+        let state = match agent.agent_status {
+            AgentStatus::Working => Some("working"),
+            AgentStatus::Blocked => Some("waiting"),
+            AgentStatus::Idle => Some("idle"),
+            AgentStatus::Done => Some("done"),
+            AgentStatus::Unknown => None,
+        };
+        let title = title.unwrap_or(name);
+        state.map_or_else(|| title.to_owned(), |state| format!("{title} · {state}"))
+    } else if let Some(label) =
+        activity.and_then(|activity| activity.running.as_ref().or(activity.last_result.as_ref()))
+    {
+        label.clone()
+    } else {
+        match number {
+            Some(number) if multiple || snapshot.numbered_panes || number > 1 => {
+                format!("Terminal {number}")
+            }
+            _ => "Terminal".into(),
+        }
+    };
+    if branches_differ {
+        if let Some(branch) = activity.and_then(|activity| activity.branch.as_deref()) {
+            label.push_str(" · ");
+            label.push_str(branch);
+        }
+    }
+    label
+}
+
 pub(super) fn draw_stack_tabs(
     frame: &mut FrameData,
     snapshot: &ClientShellSnapshot,
     panes: &[PaneHit],
     palette: &Palette,
-) -> Vec<(Rect, String)> {
-    if panes.len() < 2 && snapshot.pane_stacks.is_empty() {
-        return Vec::new();
-    }
+    tab_strip: Rect,
+    close: &mut Vec<(Rect, String)>,
+) -> (Vec<(Rect, String)>, Vec<(Rect, String)>) {
+    let mut add = Vec::new();
     let mut hits = Vec::new();
+    let top = panes.iter().map(|p| p.rect.y).min().unwrap_or(0);
+    let branches_differ = {
+        let mut branches = snapshot
+            .pane_activity
+            .values()
+            .filter_map(|activity| activity.branch.as_deref());
+        branches
+            .next()
+            .is_some_and(|first| branches.any(|branch| branch != first))
+    };
+    let multiple_panes = snapshot
+        .panes
+        .iter()
+        .filter(|pane| Some(pane.workspace_id.as_str()) == snapshot.focused_workspace_id.as_deref())
+        .take(2)
+        .count()
+        > 1;
     for pane in panes {
         let members = snapshot
             .pane_stacks
             .get(&pane.pane_id)
             .map(Vec::as_slice)
             .unwrap_or_else(|| std::slice::from_ref(&pane.pane_id));
-        let available = pane.rect.width.saturating_sub(2);
+        let tab_strip = Rect::new(
+            pane.rect.x,
+            if pane.rect.y == top {
+                tab_strip.y
+            } else {
+                pane.rect.y
+            },
+            pane.rect.width,
+            1,
+        );
+        let strip_x = tab_strip.x;
+        let tab_cap =
+            (tab_strip.width.saturating_sub(2) as usize / members.len().max(1)).min(44) as u16;
+        let available = tab_strip.width.saturating_sub(2);
         let count = members.len().min(usize::from(available));
-        if count == 0 || pane.rect.y >= frame.height || pane.inner_rect.y <= pane.rect.y {
+        if count == 0 || tab_strip.is_empty() || tab_strip.y >= frame.height {
             continue;
         }
-        let mut x = pane.rect.x + 1;
-        for (index, member) in members.iter().take(count).enumerate() {
-            let width = (available - (x - pane.rect.x - 1)) / ((count - index) as u16);
-            let area = Rect::new(x, pane.rect.y, width, 1);
-            let Some(entry) = snapshot.panes.iter().find(|entry| &entry.pane_id == member) else {
-                x += width;
-                continue;
-            };
-            let label = snapshot
-                .agents
-                .iter()
-                .find(|agent| &agent.pane_id == member)
-                .and_then(|agent| agent.name.as_deref())
-                .or(entry.label.as_deref())
-                .or_else(|| {
-                    entry
-                        .cwd
-                        .as_deref()
-                        .and_then(|cwd| cwd.rsplit(['/', '\\']).find(|part| !part.is_empty()))
-                })
-                .unwrap_or(member);
+        let mut x = strip_x;
+        for member in members.iter().take(count) {
+            let cap = tab_cap.min(tab_strip.right().saturating_sub(x));
+            if cap == 0 {
+                break;
+            }
+            let label = pane_tab_label(snapshot, member, multiple_panes, branches_differ);
+            let width = render::display_width(&label)
+                .saturating_add(4)
+                .clamp(8, 44)
+                .min(cap.saturating_sub(1).max(1));
+            let area = Rect::new(x, tab_strip.y, width, 1);
             let mut buffer = Buffer::empty(area);
             let style = if member == &pane.pane_id {
-                Style::default().fg(palette.panel_bg).bg(palette.accent)
+                Style::default().fg(palette.accent).bg(palette.surface0)
             } else {
                 Style::default().fg(palette.text).bg(palette.surface0)
             };
@@ -352,18 +598,45 @@ pub(super) fn draw_stack_tabs(
                 &mut buffer,
                 area.x,
                 area.y,
-                width,
+                if width >= 4 { width - 2 } else { width },
                 &format!(" {label} "),
                 style,
             );
+            if width >= 4 {
+                let button = Rect::new(area.right() - 2, area.y, 2, 1);
+                render::put_text(
+                    &mut buffer,
+                    button.x,
+                    button.y,
+                    button.width,
+                    "\u{00d7}",
+                    style,
+                );
+                close.push((button, member.clone()));
+            }
             let offset = usize::from(area.y) * usize::from(frame.width);
             for col in area.x..area.right().min(frame.width) {
                 frame.cells[offset + usize::from(col)] =
                     crate::protocol::CellData::from_ratatui_cell(&buffer[(col, area.y)]);
             }
             hits.push((area, member.clone()));
-            x += width;
+            x += width + u16::from(cap > width);
+        }
+        if x < tab_strip.right().min(frame.width) {
+            let area = Rect::new(x, tab_strip.y, 1, 1);
+            let mut buffer = Buffer::empty(area);
+            render::put_text(
+                &mut buffer,
+                x,
+                area.y,
+                1,
+                "+",
+                Style::default().fg(palette.text),
+            );
+            frame.cells[usize::from(area.y) * usize::from(frame.width) + usize::from(x)] =
+                crate::protocol::CellData::from_ratatui_cell(&buffer[(x, area.y)]);
+            add.push((area, pane.pane_id.clone()));
         }
     }
-    hits
+    (hits, add)
 }

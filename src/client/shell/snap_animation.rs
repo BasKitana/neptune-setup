@@ -2,13 +2,14 @@ use super::*;
 use crate::api::schema::PaneDirection;
 use std::time::{Duration, Instant};
 
-const DURATION: Duration = Duration::from_millis(140);
+const DURATION: Duration = Duration::from_millis(160);
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
 #[derive(Clone, Debug)]
 pub(super) struct SnapAnimation {
     started: Instant,
     running: bool,
+    from: Option<Rect>,
 }
 
 impl SnapAnimation {
@@ -16,6 +17,14 @@ impl SnapAnimation {
         Self {
             started: Instant::now(),
             running: true,
+            from: None,
+        }
+    }
+
+    pub(super) fn from_region(from: Rect) -> Self {
+        Self {
+            from: Some(from),
+            ..Self::new()
         }
     }
 
@@ -25,6 +34,17 @@ impl SnapAnimation {
             / DURATION.as_secs_f32())
         .min(1.0);
         let fraction = 1.0 - (1.0 - t).powi(3);
+        if let Some(from) = self.from {
+            let lerp = |a: u16, b: u16| {
+                (f32::from(a) + (f32::from(b) - f32::from(a)) * fraction).round() as u16
+            };
+            return Rect::new(
+                lerp(from.x, area.x),
+                lerp(from.y, area.y),
+                lerp(from.width, area.width).max(1),
+                lerp(from.height, area.height).max(1),
+            );
+        }
         let extent = |length: u16| (f32::from(length) * fraction).round().max(1.0) as u16;
         match edge {
             Left => Rect::new(area.x, area.y, extent(area.width), area.height),
@@ -42,9 +62,21 @@ impl SnapAnimation {
 }
 
 impl ClientShellState {
+    fn snap_animation(&self) -> Option<&SnapAnimation> {
+        match &self.chrome_drag {
+            Some(ClientChromeDrag::Tab {
+                snap: Some(snap), ..
+            }) => Some(&snap.animation),
+            Some(ClientChromeDrag::PaneToTab {
+                stack_preview: Some(preview),
+                ..
+            }) => Some(&preview.animation),
+            _ => None,
+        }
+    }
+
     pub(super) fn snap_preview_timer_delay(&self) -> Duration {
-        if matches!(&self.chrome_drag, Some(ClientChromeDrag::Tab { snap: Some(snap), .. }) if snap.animation.running)
-        {
+        if self.snap_animation().is_some_and(|a| a.running) {
             FRAME_INTERVAL
         } else {
             Duration::MAX
@@ -52,16 +84,20 @@ impl ClientShellState {
     }
 
     pub(crate) fn tick_snap_preview(&mut self, now: Instant) -> bool {
-        let Some(ClientChromeDrag::Tab {
-            snap: Some(snap), ..
-        }) = &mut self.chrome_drag
-        else {
-            return false;
+        let animation = match &mut self.chrome_drag {
+            Some(ClientChromeDrag::Tab {
+                snap: Some(snap), ..
+            }) => &mut snap.animation,
+            Some(ClientChromeDrag::PaneToTab {
+                stack_preview: Some(preview),
+                ..
+            }) => &mut preview.animation,
+            _ => return false,
         };
-        if !snap.animation.running {
+        if !animation.running {
             return false;
         }
-        snap.animation.running = now.saturating_duration_since(snap.animation.started) < DURATION;
+        animation.running = now.saturating_duration_since(animation.started) < DURATION;
         true
     }
 }
@@ -76,6 +112,7 @@ mod tests {
         let animation = SnapAnimation {
             started,
             running: true,
+            from: None,
         };
         let area = Rect::new(10, 4, 40, 24);
         for (edge, initial) in [

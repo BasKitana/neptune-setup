@@ -121,21 +121,31 @@ pub(super) fn snapshot_with_completions(
             }
         })
         .collect();
-    let panes = snapshot
+    let mut pane_activity = std::collections::BTreeMap::new();
+    let panes: Vec<protocol::ClientShellPane> = snapshot
         .panes
         .into_iter()
         .map(|pane| {
             let pane_id = pane.pane_id;
             let focused = focused_pane_id.as_deref() == Some(pane_id.as_str());
-            let right_click_passthrough = app
+            let pane_state = app
                 .parse_pane_id(&pane_id)
                 .and_then(|(workspace_index, pane_id)| {
                     app.state
                         .workspaces
                         .get(workspace_index)?
                         .pane_state(pane_id)
-                })
-                .is_some_and(|pane| pane.right_click_passthrough);
+                });
+            if focused_workspace_id.as_deref() == Some(pane.workspace_id.as_str()) {
+                if let Some(activity) = pane_state
+                    .and_then(|pane| app.terminal_runtimes.get(&pane.attached_terminal_id))
+                    .and_then(|runtime| runtime.pane_activity())
+                {
+                    pane_activity.insert(pane_id.clone(), activity);
+                }
+            }
+            let right_click_passthrough =
+                pane_state.is_some_and(|pane| pane.right_click_passthrough);
             protocol::ClientShellPane {
                 pane_id,
                 workspace_id: pane.workspace_id,
@@ -259,6 +269,27 @@ pub(super) fn snapshot_with_completions(
                 .collect()
         })
         .unwrap_or_default();
+    let mut display_numbers = app.terminal_display_numbers.borrow_mut();
+    let mut terminal_numbers = std::collections::BTreeMap::new();
+    let mut ordered_panes = panes.iter().collect::<Vec<_>>();
+    ordered_panes.sort_by_key(|pane| {
+        pane.pane_id
+            .rsplit_once(":p")
+            .and_then(|(_, number)| crate::workspace::decode_public_number(number))
+            .unwrap_or(0)
+    });
+    for pane in ordered_panes {
+        let numbers = display_numbers
+            .entry(pane.workspace_id.clone())
+            .or_default();
+        let next = numbers.len() + 1;
+        let number = *numbers.entry(pane.pane_id.clone()).or_insert(next);
+        terminal_numbers.insert(pane.pane_id.clone(), number);
+    }
+    let numbered_panes = focused_workspace_id
+        .as_ref()
+        .and_then(|id| display_numbers.get(id))
+        .is_some_and(|numbers| numbers.len() > 1);
     let shell = protocol::ClientShellSnapshot {
         boot_id: boot_id.to_owned(),
         revision,
@@ -279,6 +310,9 @@ pub(super) fn snapshot_with_completions(
         agent_view_label,
         agent_order,
         pane_stacks,
+        pane_activity,
+        numbered_panes,
+        terminal_numbers,
         workspaces,
         tabs,
         panes,
@@ -649,6 +683,41 @@ fn split_hit_rect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn terminal_labels_ignore_internal_id_gaps_and_keep_allocated_numbers() {
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = crate::app::App::new(
+            &crate::config::Config::default(),
+            crate::app::AppPolicy::TEST,
+            None,
+            rx,
+            crate::api::EventHub::default(),
+        );
+        let mut workspace = crate::workspace::Workspace::test_new("casino");
+        for number in workspace.public_pane_numbers.values_mut() {
+            *number = 19;
+        }
+        workspace.next_public_pane_number = 20;
+        app.state.workspaces = vec![workspace];
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+        let first = snapshot(&app, "test", 1, None, None);
+        assert_eq!(
+            first.terminal_numbers.values().copied().collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert!(!first.numbered_panes);
+        app.state.workspaces[0].test_add_tab(None);
+        app.state.ensure_test_terminals();
+        let second = snapshot(&app, "test", 2, None, None);
+        assert_eq!(second.terminal_numbers.len(), 2);
+        assert!(second.numbered_panes);
+        for (id, number) in first.terminal_numbers {
+            assert_eq!(second.terminal_numbers[&id], number);
+        }
+        assert!(second.terminal_numbers.values().any(|number| *number == 2));
+    }
 
     #[tokio::test(flavor = "current_thread")]
     async fn snapshot_metadata_skips_scroll_reads_and_preserves_public_session_data() {

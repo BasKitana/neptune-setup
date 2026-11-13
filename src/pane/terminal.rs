@@ -612,6 +612,10 @@ impl PaneTerminal {
             .maybe_restore_host_terminal_theme(pane_id, shell_pid)
     }
 
+    pub(crate) fn pane_activity(&self) -> Option<crate::protocol::PaneActivity> {
+        self.ghostty.core.lock().ok()?.agent_osc_state.activity()
+    }
+
     pub fn terminal_title(&self) -> Option<String> {
         self.ghostty.terminal_title()
     }

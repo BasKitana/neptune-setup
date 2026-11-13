@@ -3530,6 +3530,10 @@ impl PaneRuntime {
         self.terminal.detection_text()
     }
 
+    pub(crate) fn pane_activity(&self) -> Option<crate::protocol::PaneActivity> {
+        self.terminal.pane_activity()
+    }
+
     pub fn terminal_title(&self) -> Option<String> {
         self.terminal.terminal_title()
     }

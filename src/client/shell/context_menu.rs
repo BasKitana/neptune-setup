@@ -413,6 +413,7 @@ impl ClientShellState {
             ClientContextMenuAction::SplitRight | ClientContextMenuAction::SplitDown => {
                 self.push_endpoint_method(
                     Method::PaneSplit(PaneSplitParams {
+                        stack: false,
                         workspace_id: Some(workspace_id),
                         target_pane_id: Some(pane_id),
                         direction: if action == ClientContextMenuAction::SplitRight {

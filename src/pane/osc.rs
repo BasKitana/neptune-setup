@@ -496,15 +496,17 @@ pub(super) struct AgentOscStateTracker {
     latest_title: Option<String>,
     terminal_title: Option<String>,
     latest_progress: Option<String>,
+    activity: Option<crate::protocol::PaneActivity>,
 }
 
 impl AgentOscStateTracker {
     pub(super) fn observe(&mut self, bytes: &[u8]) -> bool {
-        let (collector, latest_title, terminal_title, latest_progress) = (
+        let (collector, latest_title, terminal_title, latest_progress, activity) = (
             &mut self.collector,
             &mut self.latest_title,
             &mut self.terminal_title,
             &mut self.latest_progress,
+            &mut self.activity,
         );
         let mut terminal_title_changed = false;
         collector.observe(bytes, |body| {
@@ -519,6 +521,44 @@ impl AgentOscStateTracker {
                     *terminal_title = title.clone();
                     *latest_title = title;
                 }
+                b"777" if payload.starts_with(b"neptune;") => {
+                    let Ok(payload) = std::str::from_utf8(&payload[8..]) else {
+                        return;
+                    };
+                    let data = activity.get_or_insert_with(Default::default);
+                    match payload.split_once(';') {
+                        Some(("start", label)) => {
+                            let running = match label {
+                                "Dev server" | "Tests" | "Build" | "Git" | "Git diff" => {
+                                    Some(label.to_owned())
+                                }
+                                _ => None,
+                            };
+                            terminal_title_changed |= data.running != running;
+                            data.running = running;
+                        }
+                        Some(("finish", status)) => {
+                            let Ok(status) = status.parse::<u8>() else {
+                                return;
+                            };
+                            if let Some(label) = data.running.take() {
+                                terminal_title_changed = true;
+                                data.last_result = Some(if status == 0 {
+                                    format!("{label} ✓")
+                                } else {
+                                    format!("{label} failed")
+                                });
+                            }
+                        }
+                        Some(("branch", branch)) => {
+                            let branch = sanitize_agent_osc_string(branch.as_bytes(), 80);
+                            let branch = (!branch.is_empty()).then_some(branch);
+                            terminal_title_changed |= data.branch != branch;
+                            data.branch = branch;
+                        }
+                        _ => return,
+                    }
+                }
                 b"9" => {
                     *latest_progress =
                         Some(sanitize_agent_osc_string(payload, AGENT_OSC_MAX_CHARS));
@@ -527,6 +567,10 @@ impl AgentOscStateTracker {
             }
         });
         terminal_title_changed
+    }
+
+    pub(super) fn activity(&self) -> Option<crate::protocol::PaneActivity> {
+        self.activity.clone()
     }
 
     pub(super) fn terminal_title(&self) -> Option<&str> {

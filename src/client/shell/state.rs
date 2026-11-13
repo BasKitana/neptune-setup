@@ -90,6 +90,9 @@ pub(super) struct ShellHitMap {
     pub(super) workspace_scroll_metrics: Option<crate::pane::ScrollMetrics>,
     pub(super) workspace_max_scroll: usize,
     pub(super) tabs: Vec<(Rect, String)>,
+    pub(super) stack_close: Vec<(Rect, String)>,
+    pub(super) stack_add: Vec<(Rect, String)>,
+    pub(super) sidebar_terminal_tabs: Vec<(Rect, String)>,
     pub(super) stack_tabs: Vec<(Rect, String)>,
     pub(super) panes: Vec<PaneHit>,
     pub(super) popup: Option<PaneHit>,
@@ -219,7 +222,7 @@ pub(super) enum ClientChromeDrag {
         start: (u16, u16),
         dragging: bool,
         over_tab_bar: bool,
-        stack_preview: Option<Rect>,
+        stack_preview: Option<super::snap::PaneDropPreview>,
     },
     Workspace {
         source_workspace_id: String,
@@ -1231,7 +1234,7 @@ impl ClientShellState {
         self.config.layout(
             cols,
             rows,
-            self.sidebar_collapsed,
+            self.sidebar_collapsed && !self.tab_snap_enabled(),
             self.focused_tab_count(),
             self.sidebar_width,
         )

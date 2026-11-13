@@ -56,15 +56,28 @@ pub(crate) fn decode_endpoint_control(
     if kind == crate::protocol::endpoint::ENDPOINT_SNAPSHOT_KIND {
         let mut snapshot: crate::protocol::ClientShellSnapshot = serde_json::from_str(data)
             .map_err(|error| format!("invalid endpoint snapshot: {error}"))?;
-        if data.contains("\"pane_stacks\"") {
+        if data.contains("\"pane_stacks\"")
+            || data.contains("\"pane_activity\"")
+            || data.contains("\"numbered_panes\"")
+            || data.contains("\"terminal_numbers\"")
+        {
             #[derive(serde::Deserialize)]
             struct StackMetadata {
                 #[serde(default)]
                 pane_stacks: std::collections::BTreeMap<String, Vec<String>>,
+                #[serde(default)]
+                pane_activity: std::collections::BTreeMap<String, crate::protocol::PaneActivity>,
+                #[serde(default)]
+                numbered_panes: bool,
+                #[serde(default)]
+                terminal_numbers: std::collections::BTreeMap<String, usize>,
             }
-            snapshot.pane_stacks = serde_json::from_str::<StackMetadata>(data)
-                .map_err(|error| format!("invalid pane stacks: {error}"))?
-                .pane_stacks;
+            let metadata = serde_json::from_str::<StackMetadata>(data)
+                .map_err(|error| format!("invalid pane metadata: {error}"))?;
+            snapshot.pane_stacks = metadata.pane_stacks;
+            snapshot.pane_activity = metadata.pane_activity;
+            snapshot.numbered_panes = metadata.numbered_panes;
+            snapshot.terminal_numbers = metadata.terminal_numbers;
         }
         return Ok(EndpointControlMessage::Snapshot(Box::new(snapshot)));
     }
