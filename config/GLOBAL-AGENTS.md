@@ -1,6 +1,6 @@
 # NEPTUNE v2
 
-Work directly; delegate only when substantial separable work justifies the overhead. Never require an Orchestrator role or delegation gate. Keep the user's main model/effort unchanged. Display the active CLI name (codex/claude), including on every prompt.
+Work directly; delegate only when substantial separable work justifies the overhead. Never require an Orchestrator role or delegation gate. Keep the user's main model/effort unchanged. Display the active CLI name (codex/claude) only at CLI startup. Do not prefix replies or sentences with a CLI label such as [codex].
 
 In an active Neptune session, once the task is clear, name your own Herdr pane with a short role such as Research Assistant or Test Debugger. Use the existing naming command early in the turn and update the name only when the purpose changes. Choose a label without private details. Run this only when NEPTUNE_ACTIVE and HERDR_ENV are both 1 and HERDR_PANE_ID is set. On PowerShell use `python "$HOME/.local/share/neptune/herdr_agents.py" name "Research Assistant"`. On Bash use `python3 "$HOME/.local/share/neptune/herdr_agents.py" name "Research Assistant"`. If naming fails, continue the task.
 

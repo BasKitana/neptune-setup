@@ -7,7 +7,7 @@ An update to the existing `neptune` launcher, not another agent framework. Open 
 - Keep native session resume, isolated worktrees, meaningful verification, and recovery history.
 - Economical task-fit workers; the user's main AI model and effort stay unchanged.
 - Full local tool permissions are the requested default inside NEPTUNE, with native limits and explicit overrides preserved. This is not permission for spending or publishing.
-- CLI labels update at startup and on every prompt. No mandatory Orchestrator role or delegation gate.
+- CLI labels appear at startup. No mandatory Orchestrator role or delegation gate.
 
 Read START-HERE.md for installation/update. This repository contains source/config templates, not credentials, chats, binaries, or an automatic installer. Existing Windows runtime fixes must be preserved. FirstMate is not established as supported on this Windows host; do not install another OS to force it.
 
