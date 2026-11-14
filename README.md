@@ -2,6 +2,8 @@
 
 Neptune is a terminal workspace for coding with Codex and Claude. It brings project shells and coding agents into one WezTerm window using Herdr.
 
+[Watch the 57-second portrait showcase](media/neptune-showcase.mp4).
+
 [Watch the narrated Neptune walkthrough](docs/neptune-demo.mp4).
 
 ## What you can do
